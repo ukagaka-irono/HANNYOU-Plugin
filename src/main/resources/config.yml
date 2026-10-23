@@ -1,0 +1,12 @@
+# HANNYOU Plugin - Knights Editor 設定
+
+# 役職の作成・編集・削除などを監査ログ (logs/) と管理者チャットに記録する
+log-role-changes: true
+
+settings:
+  # /knights roleremove 後、確定(/knights roleaccept)を待つ秒数
+  deletion-timeout: 30
+  # 登録できる役職の最大数 (-1 = 無制限)
+  max-roles: -1
+  # 参加時に役職の装備・インベントリを再配布する (false の場合はポーション効果のみ再適用)
+  reapply-items-on-join: true
