@@ -55,13 +55,27 @@ public final class RoleListGUI extends BaseGUI {
                             "§7ID: " + role.getId(),
                             "",
                             "§e左クリック: 編集",
-                            "§b右クリック: コピー")),
+                            "§b右クリック: コピー",
+                            "§dShift+左クリック: 試着",
+                            "§6Shift+右クリック: プレイヤーに付与",
+                            "§cQキー: 削除")),
                     e -> {
                         playClickSound();
                         Role current = plugin.getRoleManager().get(role.getId());
                         if (current == null) return;
-                        if (e.isRightClick()) copyRole(current);
-                        else switchTo(RoleEditorGUI.edit(plugin, player, current));
+                        switch (e.getClick()) {
+                            case DROP, CONTROL_DROP -> switchTo(new ConfirmDeleteGUI(plugin, player, current,
+                                    () -> new RoleListGUI(plugin, player)));
+                            case SHIFT_LEFT -> transition(() -> {
+                                player.closeInventory();
+                                plugin.getTrialManager().start(player, current, () -> new RoleListGUI(plugin, player).open());
+                            });
+                            case SHIFT_RIGHT -> switchTo(new AssignGUI(plugin, player, current.getId(),
+                                    () -> new RoleListGUI(plugin, player)));
+                            case RIGHT -> copyRole(current);
+                            case LEFT -> switchTo(RoleEditorGUI.edit(plugin, player, current));
+                            default -> {}
+                        }
                     });
         }
 

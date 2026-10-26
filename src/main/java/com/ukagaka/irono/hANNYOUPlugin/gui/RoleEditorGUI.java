@@ -12,6 +12,7 @@ import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -35,7 +36,10 @@ public final class RoleEditorGUI extends BaseGUI {
     private static final int PAGE_EFFECTS = 3;
     private static final int PAGE_SYSTEM = 4;
 
+    private static final int SLOT_FROM_HAND = 47;
     private static final int SLOT_EXPORT = 48;
+    private static final int SLOT_TRY = 51;
+    private static final int SLOT_ASSIGN = 52;
     private static final int SLOT_CLOSE = 49;
     private static final int SLOT_SAVE = 50;
     private static final int SLOT_SYSTEM_ID = 13;
@@ -60,12 +64,15 @@ public final class RoleEditorGUI extends BaseGUI {
             PotionEffectType.CONDUIT_POWER, PotionEffectType.DOLPHINS_GRACE, PotionEffectType.LUCK,
             PotionEffectType.HERO_OF_THE_VILLAGE, PotionEffectType.SLOWNESS, PotionEffectType.MINING_FATIGUE,
             PotionEffectType.INSTANT_DAMAGE, PotionEffectType.NAUSEA, PotionEffectType.BLINDNESS,
-            PotionEffectType.HUNGER, PotionEffectType.WEAKNESS, PotionEffectType.POISON);
+            PotionEffectType.HUNGER, PotionEffectType.WEAKNESS, PotionEffectType.POISON,
+            PotionEffectType.WITHER, PotionEffectType.LEVITATION, PotionEffectType.UNLUCK,
+            PotionEffectType.BAD_OMEN, PotionEffectType.DARKNESS);
     private static final int[] EFFECT_SLOTS = {
             10, 11, 12, 13, 14, 15, 16,
             19, 20, 21, 22, 23,
             28, 29, 30, 31, 32, 33, 34, 35,
-            37, 38, 39, 40, 41, 42, 43};
+            37, 38, 39, 40, 41, 42, 43,
+            24, 25, 26, 27, 36};
     private static final Set<PotionEffectType> BUFFS = Set.copyOf(EFFECTS.subList(0, 19));
     private static final String[] ROMAN = {"", "I", "II", "III"};
     private static final int MAX_EFFECT_LEVEL = 3;
@@ -192,9 +199,11 @@ public final class RoleEditorGUI extends BaseGUI {
                 e -> { playClickSound(); promptId(); });
 
         if (mode == Mode.CREATE) {
-            set(SLOT_NAME, Items.item(Material.BOOK, "§b役職情報",
-                    "§7表示名: " + role.getDisplayName(),
-                    "§7ID: " + role.getId()));
+            button(SLOT_NAME, Items.item(Material.BOOK, "§b役職情報",
+                            "§7表示名: " + role.getDisplayName(),
+                            "§7ID: " + role.getId(),
+                            "§eクリックで表示名を変更"),
+                    e -> { playClickSound(); promptName(); });
         } else {
             button(SLOT_NAME, Items.item(Material.NAME_TAG, "§6表示名設定",
                             "§7現在: §f" + role.getDisplayName(), "", "§eクリックで変更"),
@@ -212,12 +221,68 @@ public final class RoleEditorGUI extends BaseGUI {
                         "§eクリックで保存"),
                 e -> { playClickSound(); save(); });
 
+        button(SLOT_FROM_HAND, Items.item(Material.CHEST, "§a手持ちから取り込み",
+                        "§7今の自分の装備・オフハンド・インベントリ・",
+                        "§7ホットバーで役職の中身を上書きします",
+                        "§7（自分の持ち物は減りません）",
+                        "§eクリックで取り込み"),
+                e -> importFromHand());
+
+        button(SLOT_TRY, Items.item(Material.ARMOR_STAND, "§d試着する",
+                        "§7編集中の内容を自分に一時的に適用します",
+                        "§7試着を終えると持ち物が戻り、この画面に戻ります",
+                        "§eクリックで試着"),
+                e -> { playClickSound(); tryOn(); });
+
         if (!create) {
             button(SLOT_EXPORT, Items.item(Material.BOOKSHELF, "§bこの役職をエクスポート",
                             "§7exports/ フォルダにYMLで出力します",
                             "§eクリックでエクスポート"),
                     e -> { playClickSound(); export(); });
+
+            button(SLOT_ASSIGN, Items.item(Material.PLAYER_HEAD, "§6プレイヤーに付与",
+                            "§7保存済みの役職をオンラインのプレイヤーに付与します",
+                            "§eクリックでプレイヤーを選択"),
+                    e -> openAssign());
         }
+    }
+
+    private void importFromHand() {
+        capture(); // アイコンなど、取り込み対象外の編集を失わないように
+        PlayerInventory inv = player.getInventory();
+        role.setEquipment(Role.EquipmentSlot.HELMET, cloneOf(inv.getHelmet()));
+        role.setEquipment(Role.EquipmentSlot.CHESTPLATE, cloneOf(inv.getChestplate()));
+        role.setEquipment(Role.EquipmentSlot.LEGGINGS, cloneOf(inv.getLeggings()));
+        role.setEquipment(Role.EquipmentSlot.BOOTS, cloneOf(inv.getBoots()));
+        role.setEquipment(Role.EquipmentSlot.OFFHAND, cloneOf(inv.getItemInOffHand()));
+        ItemStack[] storage = inv.getStorageContents();
+        for (int i = 0; i < Role.HOTBAR_SIZE; i++) role.setHotbarItem(i, cloneOf(storage[i]));
+        for (int i = 0; i < Role.INVENTORY_SIZE; i++) role.setInventoryItem(i, cloneOf(storage[Role.HOTBAR_SIZE + i]));
+
+        sendMessage("§a手持ちのアイテムを取り込みました");
+        playSuccessSound();
+        refresh();
+    }
+
+    private void tryOn() {
+        capture();
+        Role snapshot = role.copy();
+        transition(() -> {
+            player.closeInventory();
+            plugin.getTrialManager().start(player, snapshot, this::open);
+        });
+    }
+
+    private void openAssign() {
+        capture();
+        Role saved = plugin.getRoleManager().get(originalId);
+        if (saved == null || !saved.sameAs(role)) {
+            sendMessage("§e先に役職を保存してください（付与できるのは保存済みの内容です）");
+            playErrorSound();
+            return;
+        }
+        playClickSound();
+        switchTo(new AssignGUI(plugin, player, originalId, () -> this));
     }
 
     // ─────────────────────────────────────────────
@@ -381,6 +446,7 @@ public final class RoleEditorGUI extends BaseGUI {
             sendMessage("§a役職「" + role.getDisplayName() + "」を保存しました");
             sendMessage("§7ID: " + role.getId());
         } else {
+            Role before = roles.get(originalId);
             if (!role.getId().equals(originalId)) {
                 if (roles.exists(role.getId())) {
                     sendMessage("§cID「" + role.getId() + "」は既に存在します");
@@ -391,6 +457,7 @@ public final class RoleEditorGUI extends BaseGUI {
             } else {
                 roles.save(role);
             }
+            plugin.getRoleApplier().syncEffects(before, role);
             plugin.getAuditLogger().log(player, AuditLogger.Action.ROLE_EDIT, role.getId(),
                     "表示名: " + role.getDisplayName());
             sendMessage("§a役職「" + role.getDisplayName() + "」の変更を保存しました");

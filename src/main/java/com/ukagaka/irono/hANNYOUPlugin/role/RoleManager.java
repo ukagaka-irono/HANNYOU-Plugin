@@ -1,12 +1,16 @@
 package com.ukagaka.irono.hANNYOUPlugin.role;
 
+import com.ukagaka.irono.hANNYOUPlugin.storage.ItemCodec;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffectType;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,6 +28,8 @@ public final class RoleManager {
     public static final Pattern ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     private final Map<String, Role> roles = new ConcurrentHashMap<>();
+    /** 削除済み役職ID → その役職の効果（オフラインだった保持者の後始末用） */
+    private final Map<String, Map<PotionEffectType, Integer>> deleted = new ConcurrentHashMap<>();
     private final RoleStorage storage;
     private final IntSupplier maxRoles;
 
@@ -32,15 +38,17 @@ public final class RoleManager {
         this.maxRoles = maxRoles;
     }
 
-    public void load(List<RoleStorage.StoredRole> stored, Logger logger) {
+    public void load(RoleStorage.LoadResult result, Logger logger) {
         roles.clear();
-        for (RoleStorage.StoredRole row : stored) {
+        for (RoleStorage.StoredRole row : result.roles()) {
             try {
                 roles.put(row.id(), row.toRole());
             } catch (RuntimeException e) {
                 logger.log(Level.WARNING, "役職の読み込みに失敗しました: " + row.id(), e);
             }
         }
+        deleted.clear();
+        result.deletedRoles().forEach((id, effects) -> deleted.put(id, ItemCodec.decodeEffects(effects)));
         logger.info(roles.size() + "件の役職を読み込みました");
     }
 
@@ -81,23 +89,34 @@ public final class RoleManager {
     public void save(Role role) {
         roles.put(role.getId(), role);
         storage.save(RoleStorage.StoredRole.of(role));
+        if (deleted.remove(role.getId()) != null) storage.unmarkDeleted(role.getId());
     }
 
-    public void delete(String id) {
-        if (roles.remove(id) != null) {
+    /** 役職を削除し、削除済みとして記録する（プレイヤー側の後始末は RoleApplier#deleteRole） */
+    public Role delete(String id) {
+        Role removed = roles.remove(id);
+        if (removed != null) {
             storage.delete(id);
+            deleted.put(id, Map.copyOf(removed.getEffects()));
+            storage.markDeleted(id, ItemCodec.encodeEffects(removed.getEffects()));
         }
+        return removed;
     }
 
-    /** IDを変更して保存する。オンラインプレイヤーの役職タグも付け替える */
+    /** IDを変更して保存する。オンラインプレイヤーの役職タグも付け替える（旧IDは削除済み扱いにしない） */
     public void rename(String oldId, Role role) {
-        delete(oldId);
+        if (roles.remove(oldId) != null) storage.delete(oldId);
         save(role);
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (online.removeScoreboardTag(oldId)) {
                 online.addScoreboardTag(role.getId());
             }
         }
+    }
+
+    /** 削除済み役職の効果（削除済みでなければnull） */
+    public Map<PotionEffectType, Integer> deletedEffects(String id) {
+        return deleted.get(id);
     }
 
     /** 000001 形式で未使用の最小番号IDを作る */
@@ -115,5 +134,24 @@ public final class RoleManager {
             if (role != null) return role;
         }
         return null;
+    }
+
+    /** その役職を持っているオンラインプレイヤー */
+    public List<Player> onlineHolders(String id) {
+        List<Player> result = new ArrayList<>();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.getScoreboardTags().contains(id)) result.add(online);
+        }
+        return result;
+    }
+
+    /** 役職ID → オンライン保持者数 */
+    public Map<String, Integer> onlineHolderCounts() {
+        Map<String, Integer> counts = new HashMap<>();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            Role role = findRole(online);
+            if (role != null) counts.merge(role.getId(), 1, Integer::sum);
+        }
+        return counts;
     }
 }

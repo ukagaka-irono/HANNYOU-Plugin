@@ -2,6 +2,9 @@ package com.ukagaka.irono.hANNYOUPlugin.role;
 
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
+import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
+import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -13,6 +16,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import java.util.Collection;
 import java.util.Map;
 
 /** 役職の装備・インベントリ・永続効果をプレイヤーに適用する */
@@ -25,15 +29,48 @@ public final class RoleApplier implements Listener {
 
     /** 既存の役職タグを外して新しい役職を付与し、装備・インベントリ・効果を配布する */
     public void assign(Player player, Role role) {
+        plugin.getTrialManager().end(player, false);
+        Role previous = plugin.getRoleManager().findRole(player);
+        removeRoleTags(player);
+        player.addScoreboardTag(role.getId());
+        if (previous != null) clearEffects(player, previous.getEffects().keySet());
+        applyItems(player, role);
+        applyEffects(player, role);
+    }
+
+    /** 役職を外す。withItems=true ならインベントリと装備も空にする */
+    public void clear(Player player, boolean withItems) {
+        plugin.getTrialManager().end(player, false);
+        Role previous = plugin.getRoleManager().findRole(player);
+        removeRoleTags(player);
+        if (previous != null) clearEffects(player, previous.getEffects().keySet());
+        if (withItems) player.getInventory().clear();
+    }
+
+    private void removeRoleTags(Player player) {
         RoleManager roles = plugin.getRoleManager();
-        Role previous = roles.findRole(player);
         for (String tag : player.getScoreboardTags().toArray(String[]::new)) {
             if (roles.exists(tag)) player.removeScoreboardTag(tag);
         }
-        player.addScoreboardTag(role.getId());
-        if (previous != null) clearEffects(player, previous);
-        applyItems(player, role);
-        applyEffects(player, role);
+    }
+
+    /** 役職を削除し、オンラインの保持者からタグと効果を外す（オフラインの保持者は参加時に外す） */
+    public void deleteRole(CommandSender executor, Role role) {
+        plugin.getRoleManager().delete(role.getId());
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.removeScoreboardTag(role.getId())) clearEffects(online, role.getEffects().keySet());
+        }
+        plugin.getAuditLogger().log(executor, AuditLogger.Action.ROLE_DELETE, role.getId(),
+                "表示名: " + role.getDisplayName());
+    }
+
+    /** 役職の保存後、オンラインの保持者の効果を新しい内容に更新する（アイテムは配り直さない） */
+    public void syncEffects(Role before, Role after) {
+        for (Player holder : plugin.getRoleManager().onlineHolders(after.getId())) {
+            if (plugin.getTrialManager().isTrying(holder)) continue;
+            if (before != null) clearEffects(holder, before.getEffects().keySet());
+            applyEffects(holder, after);
+        }
     }
 
     public void applyItems(Player player, Role role) {
@@ -72,8 +109,8 @@ public final class RoleApplier implements Listener {
     }
 
     /** 役職由来（無限時間）の効果だけを外す */
-    private void clearEffects(Player player, Role role) {
-        for (PotionEffectType type : role.getEffects().keySet()) {
+    private static void clearEffects(Player player, Collection<PotionEffectType> types) {
+        for (PotionEffectType type : types) {
             PotionEffect active = player.getPotionEffect(type);
             if (active != null && active.isInfinite()) player.removePotionEffect(type);
         }
@@ -82,7 +119,15 @@ public final class RoleApplier implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        Role role = plugin.getRoleManager().findRole(player);
+        RoleManager roles = plugin.getRoleManager();
+
+        // オフライン中に削除された役職の後始末
+        for (String tag : player.getScoreboardTags().toArray(String[]::new)) {
+            Map<PotionEffectType, Integer> effects = roles.deletedEffects(tag);
+            if (effects != null && player.removeScoreboardTag(tag)) clearEffects(player, effects.keySet());
+        }
+
+        Role role = roles.findRole(player);
         if (role == null) return;
         if (plugin.getPluginConfig().reapplyItemsOnJoin()) applyItems(player, role);
         applyEffects(player, role);

@@ -232,7 +232,9 @@ public final class RoleTransfer {
                 limited++;
                 continue;
             }
+            Role before = roles.get(role.getId());
             roles.save(role);
+            if (before != null) plugin.getRoleApplier().syncEffects(before, role);
             plugin.getAuditLogger().log(executor, AuditLogger.Action.ROLE_IMPORT, role.getId(),
                     "file: " + fileName + (overwrite ? " [上書き]" : ""));
             added++;

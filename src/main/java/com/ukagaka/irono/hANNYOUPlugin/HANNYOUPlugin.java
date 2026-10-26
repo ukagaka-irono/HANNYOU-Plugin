@@ -1,10 +1,11 @@
 package com.ukagaka.irono.hANNYOUPlugin;
 
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
-import com.ukagaka.irono.hANNYOUPlugin.command.KnightsCommand;
+import com.ukagaka.irono.hANNYOUPlugin.command.HannyouCommand;
 import com.ukagaka.irono.hANNYOUPlugin.gui.GuiListener;
 import com.ukagaka.irono.hANNYOUPlugin.role.RoleApplier;
 import com.ukagaka.irono.hANNYOUPlugin.role.RoleManager;
+import com.ukagaka.irono.hANNYOUPlugin.role.TrialManager;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
 import com.ukagaka.irono.hANNYOUPlugin.transfer.RoleTransfer;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -17,6 +18,7 @@ public final class HANNYOUPlugin extends JavaPlugin {
     private RoleStorage storage;
     private RoleManager roleManager;
     private RoleApplier roleApplier;
+    private TrialManager trialManager;
     private RoleTransfer roleTransfer;
     private AuditLogger auditLogger;
     private GuiListener guiListener;
@@ -36,27 +38,37 @@ public final class HANNYOUPlugin extends JavaPlugin {
         auditLogger = new AuditLogger(this);
         roleTransfer = new RoleTransfer(this);
         roleApplier = new RoleApplier(this);
+        trialManager = new TrialManager(this);
         guiListener = new GuiListener();
 
         PluginManager pm = getServer().getPluginManager();
+        pm.registerEvents(trialManager, this);
         pm.registerEvents(roleApplier, this);
         pm.registerEvents(guiListener, this);
 
-        KnightsCommand command = new KnightsCommand(this);
+        HannyouCommand command = new HannyouCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-                event.registrar().register(command.build(), "Knights Editor - 役職管理"));
+                event.registrar().register(command.build(), "HANNYOU Plugin"));
     }
 
     @Override
     public void onDisable() {
         if (guiListener != null) guiListener.closeAll();
+        if (trialManager != null) trialManager.endAll();
         if (storage != null) storage.close();
         if (auditLogger != null) auditLogger.close();
+    }
+
+    /** config.yml を読み直す */
+    public void reloadPluginConfig() {
+        reloadConfig();
+        pluginConfig = PluginConfig.from(getConfig());
     }
 
     public PluginConfig getPluginConfig() { return pluginConfig; }
     public RoleManager getRoleManager() { return roleManager; }
     public RoleApplier getRoleApplier() { return roleApplier; }
+    public TrialManager getTrialManager() { return trialManager; }
     public RoleTransfer getRoleTransfer() { return roleTransfer; }
     public AuditLogger getAuditLogger() { return auditLogger; }
     public GuiListener getGuiListener() { return guiListener; }

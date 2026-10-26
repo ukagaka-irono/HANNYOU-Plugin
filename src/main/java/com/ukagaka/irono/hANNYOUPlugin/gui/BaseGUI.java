@@ -54,6 +54,11 @@ public abstract class BaseGUI implements InventoryHolder {
     /** インベントリの中身を描画する（描画前に中身とボタンはクリア済み） */
     protected abstract void render();
 
+    /** スロット数（9の倍数、最大54） */
+    protected int size() {
+        return SIZE;
+    }
+
     @Override
     public @NotNull Inventory getInventory() {
         return inventory;
@@ -72,7 +77,7 @@ public abstract class BaseGUI implements InventoryHolder {
         transitioning = false;
         Component title = Text.of(title());
         if (inventory == null || !title.equals(renderedTitle)) {
-            inventory = Bukkit.createInventory(this, SIZE, title);
+            inventory = Bukkit.createInventory(this, size(), title);
             renderedTitle = title;
         }
         draw();
@@ -135,7 +140,7 @@ public abstract class BaseGUI implements InventoryHolder {
 
     protected void fillBackground() {
         ItemStack glass = Items.glass();
-        for (int i = 0; i < SIZE; i++) {
+        for (int i = 0; i < inventory.getSize(); i++) {
             ItemStack current = inventory.getItem(i);
             if (current == null || current.isEmpty()) inventory.setItem(i, glass);
         }
@@ -193,7 +198,7 @@ public abstract class BaseGUI implements InventoryHolder {
 
     protected boolean runButton(InventoryClickEvent event) {
         int raw = event.getRawSlot();
-        if (raw < 0 || raw >= SIZE || actions[raw] == null) return false;
+        if (raw < 0 || raw >= inventory.getSize() || actions[raw] == null) return false;
         event.setCancelled(true);
         actions[raw].onClick(event);
         return true;

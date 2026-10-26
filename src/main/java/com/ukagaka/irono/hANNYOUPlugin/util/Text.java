@@ -1,6 +1,8 @@
 package com.ukagaka.irono.hANNYOUPlugin.util;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -18,6 +20,20 @@ public final class Text {
     /** §コード付き文字列をComponentに変換する（アイテム名と同じく斜体なし） */
     public static Component of(String legacy) {
         return SECTION.deserialize(legacy).decoration(TextDecoration.ITALIC, false);
+    }
+
+    /** クリックでコマンドを実行するチャットボタン */
+    public static Component runButton(String legacy, String command, String hoverLegacy) {
+        return of(legacy)
+                .clickEvent(ClickEvent.runCommand(command))
+                .hoverEvent(HoverEvent.showText(of(hoverLegacy)));
+    }
+
+    /** クリックでチャット入力欄にコマンドを入れるボタン */
+    public static Component suggestButton(String legacy, String command, String hoverLegacy) {
+        return of(legacy)
+                .clickEvent(ClickEvent.suggestCommand(command))
+                .hoverEvent(HoverEvent.showText(of(hoverLegacy)));
     }
 
     /** &カラーコードを§カラーコードに変換する */

@@ -1,6 +1,7 @@
 package com.ukagaka.irono.hANNYOUPlugin.audit;
 
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
+import com.ukagaka.irono.hANNYOUPlugin.Permissions;
 import com.ukagaka.irono.hANNYOUPlugin.util.Text;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -81,7 +82,7 @@ public final class AuditLogger {
                 + "§7 -> §b" + roleId
                 + (hasDetail ? "§7 | §f" + detail : ""));
         for (Player online : Bukkit.getOnlinePlayers()) {
-            if (online.hasPermission("knights.admin")) online.sendMessage(chat);
+            if (online.hasPermission(Permissions.KNIGHTS_ADMIN)) online.sendMessage(chat);
         }
     }
 

@@ -11,7 +11,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,13 +77,16 @@ public final class RoleStorage {
         }
     }
 
+    /** 起動時に読み込むデータ。deletedRoles は削除済み役職ID → その役職の効果（オフライン保持者の後始末用） */
+    public record LoadResult(List<StoredRole> roles, Map<String, String> deletedRoles) {}
+
     public RoleStorage(File dataFolder, Logger logger) {
         this.logger = logger;
         this.dbFile = new File(dataFolder, "roles.db");
     }
 
     /** 接続とテーブル作成を行い、保存済みの全役職を読み込む（起動時に一度だけ同期実行） */
-    public List<StoredRole> open() {
+    public LoadResult open() {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 dbFile.getParentFile().mkdirs();
@@ -102,14 +107,49 @@ public final class RoleStorage {
                                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                             )""");
+                    stmt.execute("""
+                            CREATE TABLE IF NOT EXISTS deleted_roles (
+                                id TEXT PRIMARY KEY,
+                                effects TEXT,
+                                deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )""");
                 }
-                return loadAll();
+                return new LoadResult(loadAll(), loadDeleted());
             } catch (ClassNotFoundException | SQLException e) {
                 logger.log(Level.SEVERE, "SQLiteデータベースに接続できませんでした。メモリのみで動作します。", e);
                 connection = null;
-                return List.<StoredRole>of();
+                return new LoadResult(List.of(), Map.of());
             }
         }, executor).join();
+    }
+
+    private Map<String, String> loadDeleted() throws SQLException {
+        Map<String, String> result = new HashMap<>();
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT id, effects FROM deleted_roles")) {
+            while (rs.next()) result.put(rs.getString(1), rs.getString(2));
+        }
+        return result;
+    }
+
+    public void markDeleted(String id, String effects) {
+        submit("mark deleted " + id, () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "INSERT OR REPLACE INTO deleted_roles (id, effects) VALUES (?, ?)")) {
+                stmt.setString(1, id);
+                stmt.setString(2, effects);
+                stmt.executeUpdate();
+            }
+        });
+    }
+
+    public void unmarkDeleted(String id) {
+        submit("unmark deleted " + id, () -> {
+            try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM deleted_roles WHERE id = ?")) {
+                stmt.setString(1, id);
+                stmt.executeUpdate();
+            }
+        });
     }
 
     public boolean isConnected() {
