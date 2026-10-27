@@ -39,6 +39,14 @@ tasks {
         options.encoding = "UTF-8"
     }
 
+    // Apache-2.0 の配布条件に従い、LICENSE と NOTICE を jar に同梱する
+    withType<Jar>().configureEach {
+        from(layout.projectDirectory) {
+            include("LICENSE", "NOTICE")
+            into("META-INF")
+        }
+    }
+
     runServer {
         // Configure the Minecraft version for our task.
         // This is the only required configuration besides applying the plugin.
