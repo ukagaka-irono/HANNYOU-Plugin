@@ -113,6 +113,14 @@ public final class KnightsCommand {
                                 .executes(ctx -> clear(ctx, false))
                                 .then(Commands.literal("items")
                                         .executes(ctx -> clear(ctx, true)))))
+                .then(Commands.literal("spec")
+                        .requires(ADMIN)
+                        .then(Commands.argument("targets", ArgumentTypes.players())
+                                .executes(ctx -> spec(ctx, true))))
+                .then(Commands.literal("unspec")
+                        .requires(ADMIN)
+                        .then(Commands.argument("targets", ArgumentTypes.players())
+                                .executes(ctx -> spec(ctx, false))))
                 .then(Commands.literal("roleremove")
                         .requires(ADMIN)
                         .then(roleArg(roleIds, (sender, role) -> scheduleRemoval(sender, role))))
@@ -331,6 +339,32 @@ public final class KnightsCommand {
         return targets.size();
     }
 
+    // ─────────────────────────────────────────────
+    // spec / unspec
+    // ─────────────────────────────────────────────
+
+    private int spec(CommandContext<CommandSourceStack> ctx, boolean enable) throws CommandSyntaxException {
+        CommandSender sender = ctx.getSource().getSender();
+        List<Player> targets = ctx.getArgument("targets", PlayerSelectorArgumentResolver.class)
+                .resolve(ctx.getSource());
+        if (targets.isEmpty()) {
+            send(sender, "§eNo matching players found.");
+            return 0;
+        }
+
+        int changed = 0;
+        for (Player target : targets) {
+            boolean done = enable
+                    ? plugin.getSpecManager().enable(target)
+                    : plugin.getSpecManager().disable(target);
+            if (done) changed++;
+        }
+        int unchanged = targets.size() - changed;
+        send(sender, (enable ? "§a" + changed + "人をスペクモードにしました" : "§a" + changed + "人のスペクモードを解除しました")
+                + (unchanged > 0 ? "§7（" + unchanged + "人は" + (enable ? "すでにスペク中" : "スペク中ではありません") + "）" : ""));
+        return changed;
+    }
+
     private static String rawArgument(CommandContext<CommandSourceStack> ctx, String name) {
         for (ParsedCommandNode<CommandSourceStack> node : ctx.getNodes()) {
             if (node.getNode().getName().equals(name)) return node.getRange().get(ctx.getInput());
@@ -500,6 +534,8 @@ public final class KnightsCommand {
             {"untry", "", "試着を終了"},
             {"assign", " <role_id>", "付与するプレイヤーをGUIで選ぶ"},
             {"edit", " <role_id>", "エディタを開く"},
+            {"spec", " <player|@selector>", "見えない・ぶつからない・操作できないクリエイティブにする"},
+            {"unspec", " <player|@selector>", "スペクモードを解除"},
             {"roleremove", " <role_id>", "Schedule deletion"},
             {"roleaccept", "", "Confirm deletion"},
             {"export", " [role_id|all]", "Export role(s) to YAML"},

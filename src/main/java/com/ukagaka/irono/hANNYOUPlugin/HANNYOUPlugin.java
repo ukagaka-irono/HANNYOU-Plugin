@@ -6,6 +6,8 @@ import com.ukagaka.irono.hANNYOUPlugin.gui.GuiListener;
 import com.ukagaka.irono.hANNYOUPlugin.role.RoleApplier;
 import com.ukagaka.irono.hANNYOUPlugin.role.RoleManager;
 import com.ukagaka.irono.hANNYOUPlugin.role.TrialManager;
+import com.ukagaka.irono.hANNYOUPlugin.spec.SpecManager;
+import com.ukagaka.irono.hANNYOUPlugin.spec.SpecRestrictions;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
 import com.ukagaka.irono.hANNYOUPlugin.transfer.RoleTransfer;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -22,6 +24,7 @@ public final class HANNYOUPlugin extends JavaPlugin {
     private RoleTransfer roleTransfer;
     private AuditLogger auditLogger;
     private GuiListener guiListener;
+    private SpecManager specManager;
 
     @Override
     public void onEnable() {
@@ -40,11 +43,15 @@ public final class HANNYOUPlugin extends JavaPlugin {
         roleApplier = new RoleApplier(this);
         trialManager = new TrialManager(this);
         guiListener = new GuiListener();
+        specManager = new SpecManager(this);
 
         PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(trialManager, this);
         pm.registerEvents(roleApplier, this);
         pm.registerEvents(guiListener, this);
+        pm.registerEvents(specManager, this);
+        pm.registerEvents(new SpecRestrictions(specManager), this);
+        specManager.start();
 
         HannyouCommand command = new HannyouCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
@@ -53,6 +60,7 @@ public final class HANNYOUPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (specManager != null) specManager.stop();
         if (guiListener != null) guiListener.closeAll();
         if (trialManager != null) trialManager.endAll();
         if (storage != null) storage.close();
@@ -72,4 +80,5 @@ public final class HANNYOUPlugin extends JavaPlugin {
     public RoleTransfer getRoleTransfer() { return roleTransfer; }
     public AuditLogger getAuditLogger() { return auditLogger; }
     public GuiListener getGuiListener() { return guiListener; }
+    public SpecManager getSpecManager() { return specManager; }
 }
