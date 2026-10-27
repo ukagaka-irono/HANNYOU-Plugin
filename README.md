@@ -2,7 +2,7 @@
 
 Paper サーバー向けのプラグインです。現在は、プレイヤーに「役職」を付与して装備・インベントリ・永続ポーション効果を配る **Knights Editor** 機能を搭載しています。
 
-Knights Editor は [KnightsEditor](#クレジット)（MIT License）を移植し、GUI の見た目はそのままに内部を作り直したものです。
+Knights Editor は KnightsEditor を移植し、GUI の見た目はそのままに内部を作り直したものです。
 
 ---
 
@@ -198,11 +198,8 @@ plugins/HANNYOU-Plugin/
 
 ## ライセンス
 
-[Apache License 2.0](LICENSE) で公開しています。
-
-このプラグインは KnightsEditor（MIT License, Copyright (c) 2026 いなり　すず）をもとにしています。移植元の著作権表示と許諾文は [NOTICE](NOTICE) に記載しています。配布するときは LICENSE と NOTICE を一緒に含めてください（ビルドした jar の `META-INF/` には自動で入ります）。
+[Apache License 2.0](LICENSE) で公開しています。著作権表示は [NOTICE](NOTICE) に記載しています。配布するときは LICENSE と NOTICE を一緒に含めてください（ビルドした jar の `META-INF/` には自動で入ります）。
 
 ## クレジット
 
 - 開発: 伺々　彩乃 ([ukagaka-irono](https://github.com/ukagaka-irono))
-- 移植元: KnightsEditor — いなり　すず（MIT License）
