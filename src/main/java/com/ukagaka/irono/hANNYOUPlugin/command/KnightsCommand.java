@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
 
@@ -223,12 +222,10 @@ public final class KnightsCommand {
             send(sender, "§e登録されている役職はありません");
             return 0;
         }
-        Map<String, Integer> holders = plugin.getRoleManager().onlineHolderCounts();
         send(sender, "§6=== 役職一覧 (" + roles.size() + "件) ===");
         for (Role role : roles) {
             sender.sendMessage(Text.runButton(
-                    "§a" + role.getDisplayName() + " §7(" + role.getId() + ") §f- 保持者 "
-                            + holders.getOrDefault(role.getId(), 0) + "人",
+                    "§a" + role.getDisplayName() + " §7(" + role.getId() + ")",
                     BASE + " info " + role.getId(), "§7クリックで詳細を表示"));
         }
         return roles.size();
@@ -258,10 +255,6 @@ public final class KnightsCommand {
             effects.add(key.substring(0, 1).toUpperCase() + key.substring(1) + " " + "I".repeat(level));
         });
         send(sender, "§7効果: §f" + (effects.isEmpty() ? "なし" : String.join(", ", effects)));
-
-        List<Player> holders = plugin.getRoleManager().onlineHolders(role.getId());
-        send(sender, "§7オンラインの保持者 (" + holders.size() + "人): §f"
-                + (holders.isEmpty() ? "なし" : String.join(", ", holders.stream().map(Player::getName).toList())));
 
         String id = role.getId();
         sender.sendMessage(Text.runButton("§e【編集】", BASE + " edit " + id, "§7エディタを開く")
@@ -438,7 +431,7 @@ public final class KnightsCommand {
 
     private static final String[][] HELP = {
             {"menu", "", "Open main menu"},
-            {"list", "", "役職の一覧と保持者数"},
+            {"list", "", "役職の一覧"},
             {"info", " <role_id>", "役職の詳細"},
             {"role", " <player|@selector> <role_id>", "Apply role (@a, @s, @p, @r 対応)"},
             {"try", " <role_id>", "役職を試着"},

@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -143,15 +142,5 @@ public final class RoleManager {
             if (online.getScoreboardTags().contains(id)) result.add(online);
         }
         return result;
-    }
-
-    /** 役職ID → オンライン保持者数 */
-    public Map<String, Integer> onlineHolderCounts() {
-        Map<String, Integer> counts = new HashMap<>();
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            Role role = findRole(online);
-            if (role != null) counts.merge(role.getId(), 1, Integer::sum);
-        }
-        return counts;
     }
 }
