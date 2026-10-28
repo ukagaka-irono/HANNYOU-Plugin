@@ -25,8 +25,8 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 
 ## 導入方法
 
-1. jar を[ビルド](#ビルド方法)します
-2. `build/libs/HANNYOU-Plugin-<version>-all.jar` をサーバーの `plugins/` フォルダに置きます
+1. [Releases](https://github.com/ukagaka-irono/HANNYOU-Plugin/releases) から `HANNYOU-Plugin-<version>-all.jar` をダウンロードします（自分で[ビルド](#ビルド方法)した場合は `build/libs/` にあります）
+2. jar をサーバーの `plugins/` フォルダに置きます
 3. サーバーを起動します
 
 ---
