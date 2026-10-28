@@ -126,12 +126,11 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 |---|---|
 | `/hannyou knights menu` | メインメニューを開く |
 | `/hannyou knights list` | 役職の一覧と、オンラインの保持者数 |
-| `/hannyou knights info <役職ID>` | 役職の中身と保持者。【編集】【試着】【付与】【削除】ボタン付き |
+| `/hannyou knights info <役職ID>` | 役職の中身と保持者。【編集】【試着】【削除】ボタン付き |
 | `/hannyou knights role <対象> <役職ID>` | 役職を付与する |
 | `/hannyou knights clear <対象> [items]` | 役職を外す。`items` を付けるとインベントリと装備も空にする |
 | `/hannyou knights try <役職ID>` | 役職を試着する |
 | `/hannyou knights untry` | 試着を終了する |
-| `/hannyou knights assign <役職ID>` | 付与するプレイヤーを GUI で選ぶ |
 | `/hannyou knights edit <役職ID>` | エディタを開く |
 | `/hannyou knights spec [対象]` | [スペクモード](#スペクモード)にする（省略時は自分） |
 | `/hannyou knights unspec [対象]` | スペクモードを解除する（省略時は自分） |

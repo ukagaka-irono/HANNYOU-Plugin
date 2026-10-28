@@ -10,11 +10,9 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import com.ukagaka.irono.hANNYOUPlugin.Permissions;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
-import com.ukagaka.irono.hANNYOUPlugin.gui.AssignGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.ConfirmDeleteGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.MainMenuGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.RoleEditorGUI;
-import com.ukagaka.irono.hANNYOUPlugin.gui.RoleListGUI;
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
 import com.ukagaka.irono.hANNYOUPlugin.transfer.RoleTransfer;
 import com.ukagaka.irono.hANNYOUPlugin.util.Text;
@@ -92,9 +90,6 @@ public final class KnightsCommand {
                         .then(roleArg(roleIds, this::tryOn)))
                 .then(Commands.literal("untry")
                         .executes(ctx -> untry(ctx.getSource().getSender())))
-                .then(Commands.literal("assign")
-                        .requires(ADMIN)
-                        .then(roleArg(roleIds, this::openAssign)))
                 .then(Commands.literal("role")
                         .requires(ADMIN)
                         .then(Commands.argument("targets", ArgumentTypes.players())
@@ -203,13 +198,6 @@ public final class KnightsCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    private int openAssign(CommandSender sender, Role role) {
-        Player player = requirePlayer(sender);
-        if (player == null) return 0;
-        new AssignGUI(plugin, player, role.getId(), () -> new RoleListGUI(plugin, player)).open();
-        return Command.SINGLE_SUCCESS;
-    }
-
     // ─────────────────────────────────────────────
     // 試着
     // ─────────────────────────────────────────────
@@ -285,8 +273,6 @@ public final class KnightsCommand {
         sender.sendMessage(Text.runButton("§e【編集】", BASE + " edit " + id, "§7エディタを開く")
                 .append(Text.of(" "))
                 .append(Text.runButton("§d【試着】", BASE + " try " + id, "§7自分に一時的に適用する"))
-                .append(Text.of(" "))
-                .append(Text.runButton("§6【付与】", BASE + " assign " + id, "§7付与するプレイヤーを選ぶ"))
                 .append(Text.of(" "))
                 .append(Text.runButton("§c【削除】", BASE + " roleremove " + id, "§7削除の確認画面を開く")));
         return Command.SINGLE_SUCCESS;
@@ -478,7 +464,6 @@ public final class KnightsCommand {
             {"clear", " <player|@selector> [items]", "役職を解除（items で持ち物も空に）"},
             {"try", " <role_id>", "役職を試着"},
             {"untry", "", "試着を終了"},
-            {"assign", " <role_id>", "付与するプレイヤーをGUIで選ぶ"},
             {"edit", " <role_id>", "エディタを開く"},
             {"spec", " [player|@selector]", "見えない・ぶつからない・操作できないクリエイティブにする"},
             {"unspec", " [player|@selector]", "スペクモードを解除"},
