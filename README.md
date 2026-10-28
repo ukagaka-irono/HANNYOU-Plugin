@@ -128,7 +128,6 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 | `/hannyou knights list` | 役職の一覧と、オンラインの保持者数 |
 | `/hannyou knights info <役職ID>` | 役職の中身と保持者。【編集】【試着】【削除】ボタン付き |
 | `/hannyou knights role <対象> <役職ID>` | 役職を付与する |
-| `/hannyou knights clear <対象> [items]` | 役職を外す。`items` を付けるとインベントリと装備も空にする |
 | `/hannyou knights try <役職ID>` | 役職を試着する |
 | `/hannyou knights untry` | 試着を終了する |
 | `/hannyou knights edit <役職ID>` | エディタを開く |
@@ -144,7 +143,6 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 ```
 /hannyou knights role @a warrior     # 全員に付与
 /hannyou knights role Steve knight   # 特定のプレイヤーに付与
-/hannyou knights clear @a items      # 全員の役職と持ち物を外す
 ```
 
 ## 権限

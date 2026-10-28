@@ -38,15 +38,6 @@ public final class RoleApplier implements Listener {
         applyEffects(player, role);
     }
 
-    /** 役職を外す。withItems=true ならインベントリと装備も空にする */
-    public void clear(Player player, boolean withItems) {
-        plugin.getTrialManager().end(player, false);
-        Role previous = plugin.getRoleManager().findRole(player);
-        removeRoleTags(player);
-        if (previous != null) clearEffects(player, previous.getEffects().keySet());
-        if (withItems) player.getInventory().clear();
-    }
-
     private void removeRoleTags(Player player) {
         RoleManager roles = plugin.getRoleManager();
         for (String tag : player.getScoreboardTags().toArray(String[]::new)) {

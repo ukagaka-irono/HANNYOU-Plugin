@@ -96,12 +96,6 @@ public final class KnightsCommand {
                                 .then(Commands.argument("role_id", StringArgumentType.word())
                                         .suggests(roleIds)
                                         .executes(this::applyRole))))
-                .then(Commands.literal("clear")
-                        .requires(ADMIN)
-                        .then(Commands.argument("targets", ArgumentTypes.players())
-                                .executes(ctx -> clear(ctx, false))
-                                .then(Commands.literal("items")
-                                        .executes(ctx -> clear(ctx, true)))))
                 .then(Commands.literal("spec")
                         .requires(ADMIN)
                         .executes(ctx -> specSelf(ctx.getSource().getSender(), true))
@@ -279,7 +273,7 @@ public final class KnightsCommand {
     }
 
     // ─────────────────────────────────────────────
-    // role / clear
+    // role
     // ─────────────────────────────────────────────
 
     private int applyRole(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -305,20 +299,6 @@ public final class KnightsCommand {
         plugin.getAuditLogger().log(sender, AuditLogger.Action.ROLE_APPLY, roleId,
                 "対象: " + targets.size() + "人 / ターゲット指定: " + rawArgument(ctx, "targets"));
         send(sender, "§aApplied role '" + role.getDisplayName() + "§a' to " + targets.size() + " player(s).");
-        return targets.size();
-    }
-
-    private int clear(CommandContext<CommandSourceStack> ctx, boolean withItems) throws CommandSyntaxException {
-        CommandSender sender = ctx.getSource().getSender();
-        List<Player> targets = ctx.getArgument("targets", PlayerSelectorArgumentResolver.class)
-                .resolve(ctx.getSource());
-        if (targets.isEmpty()) {
-            send(sender, "§eNo matching players found.");
-            return 0;
-        }
-        for (Player target : targets) plugin.getRoleApplier().clear(target, withItems);
-        send(sender, "§a" + targets.size() + "人の役職を解除しました"
-                + (withItems ? "（インベントリと装備も空にしました）" : ""));
         return targets.size();
     }
 
@@ -461,7 +441,6 @@ public final class KnightsCommand {
             {"list", "", "役職の一覧と保持者数"},
             {"info", " <role_id>", "役職の詳細"},
             {"role", " <player|@selector> <role_id>", "Apply role (@a, @s, @p, @r 対応)"},
-            {"clear", " <player|@selector> [items]", "役職を解除（items で持ち物も空に）"},
             {"try", " <role_id>", "役職を試着"},
             {"untry", "", "試着を終了"},
             {"edit", " <role_id>", "エディタを開く"},
