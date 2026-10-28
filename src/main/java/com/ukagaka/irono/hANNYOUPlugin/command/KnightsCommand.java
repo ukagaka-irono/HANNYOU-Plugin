@@ -19,12 +19,17 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
+import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * /hannyou knights サブコマンド（Brigadier）。
@@ -67,7 +72,8 @@ public final class KnightsCommand {
                 .then(Commands.literal("itiran")
                         .executes(ctx -> openRoleList(ctx.getSource().getSender())))
                 .then(Commands.literal("list")
-                        .executes(ctx -> list(ctx.getSource().getSender())))
+                        .executes(ctx -> list(ctx.getSource().getSender()))
+                        .then(roleArg(roleIds, this::details)))
                 .then(Commands.literal("editor")
                         .executes(ctx -> createRole(ctx.getSource().getSender()))
                         .then(roleArg(roleIds, this::editRole)))
@@ -213,9 +219,44 @@ public final class KnightsCommand {
         for (Role role : roles) {
             sender.sendMessage(Text.runButton(
                     "§a" + role.getDisplayName() + " §7(" + role.getId() + ")",
-                    BASE + " editor " + role.getId(), "§7クリックでエディタを開く"));
+                    BASE + " list " + role.getId(), "§7クリックで詳細を表示"));
         }
         return roles.size();
+    }
+
+    /** 役職の中身と、編集・試着・削除のボタン */
+    private int details(CommandSender sender, Role role) {
+        send(sender, "§6=== 役職情報: " + role.getDisplayName() + "§6 ===");
+        send(sender, "§7ID: §f" + role.getId());
+
+        Component equipment = Text.of("§7装備: ");
+        String[] labels = {"頭", "胴", "脚", "足", "オフハンド"};
+        Role.EquipmentSlot[] slots = Role.EquipmentSlot.values();
+        for (int i = 0; i < slots.length; i++) {
+            ItemStack item = role.getEquipment(slots[i]);
+            equipment = equipment.append(Text.of((i == 0 ? "" : " §8/ ") + "§7" + labels[i] + " "))
+                    .append(item == null ? Text.of("§8なし") : item.displayName());
+        }
+        sender.sendMessage(equipment);
+
+        long inv = Arrays.stream(role.getInventory()).filter(Objects::nonNull).count();
+        long bar = Arrays.stream(role.getHotbar()).filter(Objects::nonNull).count();
+        send(sender, "§7インベントリ: §f" + inv + "枠 §7/ ホットバー: §f" + bar + "枠");
+
+        List<String> effects = new ArrayList<>();
+        role.getEffects().forEach((type, level) -> {
+            String key = type.getKey().getKey();
+            effects.add(key.substring(0, 1).toUpperCase() + key.substring(1) + " " + "I".repeat(level));
+        });
+        send(sender, "§7効果: §f" + (effects.isEmpty() ? "なし" : String.join(", ", effects)));
+
+        String id = role.getId();
+        sender.sendMessage(Text.runButton("§e【編集】", BASE + " editor " + id, "§7エディタを開く")
+                .append(Text.of(" "))
+                .append(Text.runButton("§d【試着】", BASE + " try " + id, "§7自分に一時的に適用する"))
+                .append(Text.of(" "))
+                .append(Text.runButton("§c【削除】", BASE + " roleremove " + id, "§7削除の確認画面を開く")));
+        return Command.SINGLE_SUCCESS;
     }
 
     // ─────────────────────────────────────────────
@@ -385,7 +426,7 @@ public final class KnightsCommand {
 
     private static final String[][] HELP = {
             {"itiran", "", "役職一覧をGUIで開く"},
-            {"list", "", "役職の一覧"},
+            {"list", " [role_id]", "役職の一覧（IDを指定すると詳細）"},
             {"role", " <player|@selector> <role_id>", "Apply role (@a, @s, @p, @r 対応)"},
             {"try", " <role_id>", "役職を試着"},
             {"untry", "", "試着を終了"},

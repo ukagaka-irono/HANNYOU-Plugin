@@ -135,7 +135,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 | コマンド | 説明 |
 |---|---|
 | `/hannyou knights itiran` | 役職一覧を GUI で開く |
-| `/hannyou knights list` | 役職の一覧（クリックでエディタを開く） |
+| `/hannyou knights list [役職ID]` | 役職の一覧（クリックで詳細を表示）。役職IDを指定すると、その役職の中身と【編集】【試着】【削除】ボタンを表示する |
 | `/hannyou knights role <対象> <役職ID>` | 役職を付与する |
 | `/hannyou knights try <役職ID>` | 役職を試着する |
 | `/hannyou knights untry` | 試着を終了する |
