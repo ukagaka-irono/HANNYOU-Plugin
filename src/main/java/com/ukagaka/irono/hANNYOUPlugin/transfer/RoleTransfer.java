@@ -4,13 +4,11 @@ import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
 import com.ukagaka.irono.hANNYOUPlugin.role.RoleManager;
-import com.ukagaka.irono.hANNYOUPlugin.storage.ItemCodec;
+import com.ukagaka.irono.hANNYOUPlugin.storage.RoleYaml;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.potion.PotionEffectType;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,8 +33,6 @@ import java.util.logging.Level;
  * KnightsEditor が出力した旧形式のファイルも読み込める。
  */
 public final class RoleTransfer {
-    /** 1 = KnightsEditor形式（Java直列化）、2 = Paperバイナリ形式 */
-    private static final int FORMAT = 2;
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     public record ImportResult(int added, int skipped, int limited) {}
@@ -63,42 +59,19 @@ public final class RoleTransfer {
     /** @return 出力ファイル名（失敗時null）をメインスレッドで返す */
     public CompletableFuture<String> exportRole(Role role) {
         YamlConfiguration yml = new YamlConfiguration();
-        yml.set("format", FORMAT);
+        yml.set("format", RoleYaml.FORMAT);
         yml.set("id", role.getId());
-        writeRole(yml, role);
+        RoleYaml.write(yml, role);
         return write("role_" + role.getId() + "_" + TIMESTAMP.format(LocalDateTime.now()) + ".yml", yml);
     }
 
     public CompletableFuture<String> exportAll(Collection<Role> roles) {
         YamlConfiguration yml = new YamlConfiguration();
-        yml.set("format", FORMAT);
+        yml.set("format", RoleYaml.FORMAT);
         for (Role role : roles) {
-            writeRole(yml.createSection("roles." + role.getId()), role);
+            RoleYaml.write(yml.createSection("roles." + role.getId()), role);
         }
         return write("roles_all_" + TIMESTAMP.format(LocalDateTime.now()) + ".yml", yml);
-    }
-
-    private void writeRole(ConfigurationSection section, Role role) {
-        section.set("display_name", role.getDisplayName());
-        section.set("icon", encode(role.getIcon()));
-        Map<String, String> equipment = new LinkedHashMap<>();
-        role.getEquipment().forEach((slot, item) -> equipment.put(slot.name(), encode(item)));
-        section.set("equipment", equipment);
-        writeItems(section, "inventory", role.getInventory());
-        writeItems(section, "hotbar", role.getHotbar());
-        Map<String, Integer> effects = new LinkedHashMap<>();
-        role.getEffects().forEach((type, level) -> effects.put(ItemCodec.effectKey(type), level));
-        section.set("effects", effects);
-    }
-
-    private void writeItems(ConfigurationSection section, String path, ItemStack[] items) {
-        for (int i = 0; i < items.length; i++) {
-            if (items[i] != null) section.set(path + "." + i, encode(items[i]));
-        }
-    }
-
-    private static String encode(ItemStack item) {
-        return ItemCodec.toBase64(ItemCodec.encode(item));
     }
 
     private CompletableFuture<String> write(String fileName, YamlConfiguration yml) {
@@ -167,55 +140,7 @@ public final class RoleTransfer {
     }
 
     private Role parseRole(ConfigurationSection section, String id, int format) {
-        Role role = new Role(id, section.getString("display_name", "インポートされた役職"));
-        role.setIcon(decode(section.getString("icon"), format, id));
-
-        ConfigurationSection equipment = section.getConfigurationSection("equipment");
-        if (equipment != null) {
-            for (String slotName : equipment.getKeys(false)) {
-                try {
-                    role.setEquipment(Role.EquipmentSlot.valueOf(slotName),
-                            decode(equipment.getString(slotName), format, id));
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-        }
-
-        readItems(section.getConfigurationSection("inventory"), Role.INVENTORY_SIZE, format, id, role::setInventoryItem);
-        readItems(section.getConfigurationSection("hotbar"), Role.HOTBAR_SIZE, format, id, role::setHotbarItem);
-
-        ConfigurationSection effects = section.getConfigurationSection("effects");
-        if (effects != null) {
-            for (String key : effects.getKeys(false)) {
-                PotionEffectType type = ItemCodec.effectType(key);
-                if (type != null) role.setEffectLevel(type, effects.getInt(key));
-            }
-        }
-        return role;
-    }
-
-    private interface IndexedSetter {
-        void set(int index, ItemStack item);
-    }
-
-    private void readItems(ConfigurationSection section, int size, int format, String id, IndexedSetter setter) {
-        if (section == null) return;
-        for (String key : section.getKeys(false)) {
-            try {
-                int index = Integer.parseInt(key);
-                if (index >= 0 && index < size) setter.set(index, decode(section.getString(key), format, id));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-    }
-
-    private ItemStack decode(String data, int format, String roleId) {
-        try {
-            return format >= 2 ? ItemCodec.decode(ItemCodec.fromBase64(data)) : ItemCodec.decodeLegacyBase64(data);
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "アイテムを読み込めませんでした (役職: " + roleId + ")", e);
-            return null;
-        }
+        return RoleYaml.read(section, id, format, plugin.getLogger());
     }
 
     /** 読み込んだ役職を登録する（overwrite=false の場合は既存IDをスキップ） */

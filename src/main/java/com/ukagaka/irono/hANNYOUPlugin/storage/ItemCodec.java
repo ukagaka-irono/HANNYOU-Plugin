@@ -7,10 +7,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.io.BukkitObjectInputStream;
 
 import java.io.ByteArrayInputStream;
-import java.util.Arrays;
 import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * アイテム・ポーション効果のシリアライズ。
@@ -28,21 +25,6 @@ public final class ItemCodec {
         if (data == null || data.length == 0) return null;
         ItemStack item = ItemStack.deserializeBytes(data);
         return item.isEmpty() ? null : item;
-    }
-
-    /** null・空気を含む配列をそのまま1つのバイト列にまとめる */
-    public static byte[] encodeArray(ItemStack[] items) {
-        return ItemStack.serializeItemsAsBytes(Arrays.asList(items));
-    }
-
-    public static ItemStack[] decodeArray(byte[] data, int size) {
-        ItemStack[] result = new ItemStack[size];
-        if (data == null || data.length == 0) return result;
-        ItemStack[] decoded = ItemStack.deserializeItemsFromBytes(data);
-        for (int i = 0; i < Math.min(size, decoded.length); i++) {
-            result[i] = decoded[i] == null || decoded[i].isEmpty() ? null : decoded[i];
-        }
-        return result;
     }
 
     public static String toBase64(byte[] data) {
@@ -72,27 +54,5 @@ public final class ItemCodec {
     public static PotionEffectType effectType(String key) {
         NamespacedKey namespacedKey = NamespacedKey.fromString(key.toLowerCase());
         return namespacedKey == null ? null : Registry.MOB_EFFECT.get(namespacedKey);
-    }
-
-    public static String encodeEffects(Map<PotionEffectType, Integer> effects) {
-        StringBuilder sb = new StringBuilder();
-        effects.forEach((type, level) -> sb.append(effectKey(type)).append('=').append(level).append(';'));
-        return sb.toString();
-    }
-
-    public static Map<PotionEffectType, Integer> decodeEffects(String data) {
-        Map<PotionEffectType, Integer> effects = new LinkedHashMap<>();
-        if (data == null || data.isEmpty()) return effects;
-        for (String part : data.split(";")) {
-            int sep = part.lastIndexOf('=');
-            if (sep <= 0) continue;
-            PotionEffectType type = effectType(part.substring(0, sep));
-            if (type == null) continue;
-            try {
-                effects.put(type, Integer.parseInt(part.substring(sep + 1)));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return effects;
     }
 }

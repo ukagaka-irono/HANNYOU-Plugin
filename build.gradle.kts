@@ -18,7 +18,6 @@ dependencies {
 
 bukkitPluginYaml {
     main = "com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin"
-    paperPluginLoader = "com.ukagaka.irono.hANNYOUPlugin.HANNYOUPluginLoader"
     apiVersion = "26.1.2"
 
     load = BukkitPluginYaml.PluginLoadOrder.STARTUP

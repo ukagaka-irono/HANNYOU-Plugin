@@ -33,10 +33,7 @@ public final class HANNYOUPlugin extends JavaPlugin {
 
         storage = new RoleStorage(getDataFolder(), getLogger());
         roleManager = new RoleManager(storage, () -> pluginConfig.maxRoles());
-        roleManager.load(storage.open(), getLogger());
-        if (!storage.isConnected()) {
-            getLogger().warning("データベースに接続できないため、役職は再起動で失われます");
-        }
+        roleManager.load(storage.load(), getLogger());
 
         auditLogger = new AuditLogger(this);
         roleTransfer = new RoleTransfer(this);

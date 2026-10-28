@@ -1,229 +1,150 @@
 package com.ukagaka.irono.hANNYOUPlugin.storage;
 
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.potion.PotionEffectType;
 
 import java.io.File;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * SQLiteへの永続化。
- * 書き込みは専用スレッド1本で順番に処理するため、メインスレッド（TPS）をブロックしない。
- * 接続もそのスレッドだけが使うのでロック不要。
+ * knights-role.yml への永続化。
+ * 内容はメインスレッドで文字列にまとめ、ファイルへの書き込みは専用スレッド1本で行うため、TPSを下げない。
+ * 書き込み待ちの間に変更が重なった場合は、最新の内容だけを書き込む。
+ * 一時ファイルに書いてから置き換えるので、書き込み中に落ちてもファイルが壊れない。
  */
 public final class RoleStorage {
-    private static final String UPSERT = """
-            INSERT INTO roles (id, display_name, icon, equipment, inventory, hotbar, effects)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                display_name = excluded.display_name,
-                icon = excluded.icon,
-                equipment = excluded.equipment,
-                inventory = excluded.inventory,
-                hotbar = excluded.hotbar,
-                effects = excluded.effects,
-                updated_at = CURRENT_TIMESTAMP""";
+    public static final String FILE_NAME = "knights-role.yml";
+    private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final List<String> HEADER = List.of(
+            "HANNYOU Plugin - Knights Editor の役職データ",
+            "手で編集するときは、サーバーを止めてから編集してください");
 
     private final Logger logger;
-    private final File dbFile;
+    private final Path file;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("HANNYOU-Storage").daemon().factory());
-    private Connection connection;
-
-    /** DBとの受け渡し用スナップショット。アイテムはメインスレッドでバイト列化しておく */
-    public record StoredRole(String id, String displayName, byte[] icon, byte[] equipment,
-                             byte[] inventory, byte[] hotbar, String effects) {
-
-        public static StoredRole of(Role role) {
-            ItemStack[] equipment = new ItemStack[Role.EquipmentSlot.values().length];
-            role.getEquipment().forEach((slot, item) -> equipment[slot.ordinal()] = item);
-            return new StoredRole(
-                    role.getId(),
-                    role.getDisplayName(),
-                    ItemCodec.encode(role.getIcon()),
-                    ItemCodec.encodeArray(equipment),
-                    ItemCodec.encodeArray(role.getInventory()),
-                    ItemCodec.encodeArray(role.getHotbar()),
-                    ItemCodec.encodeEffects(role.getEffects()));
-        }
-
-        public Role toRole() {
-            Role role = new Role(id, displayName);
-            role.setIcon(ItemCodec.decode(icon));
-            Role.EquipmentSlot[] slots = Role.EquipmentSlot.values();
-            var equip = ItemCodec.decodeArray(equipment, slots.length);
-            for (Role.EquipmentSlot slot : slots) role.setEquipment(slot, equip[slot.ordinal()]);
-            var inv = ItemCodec.decodeArray(inventory, Role.INVENTORY_SIZE);
-            for (int i = 0; i < inv.length; i++) role.setInventoryItem(i, inv[i]);
-            var bar = ItemCodec.decodeArray(hotbar, Role.HOTBAR_SIZE);
-            for (int i = 0; i < bar.length; i++) role.setHotbarItem(i, bar[i]);
-            role.getEffects().putAll(ItemCodec.decodeEffects(effects));
-            return role;
-        }
-    }
+    /** 書き込み待ちの内容（なければnull） */
+    private final AtomicReference<String> pending = new AtomicReference<>();
 
     /** 起動時に読み込むデータ。deletedRoles は削除済み役職ID → その役職の効果（オフライン保持者の後始末用） */
-    public record LoadResult(List<StoredRole> roles, Map<String, String> deletedRoles) {}
+    public record LoadResult(Map<String, Role> roles, Map<String, Map<PotionEffectType, Integer>> deletedRoles) {}
 
     public RoleStorage(File dataFolder, Logger logger) {
         this.logger = logger;
-        this.dbFile = new File(dataFolder, "roles.db");
+        this.file = dataFolder.toPath().resolve(FILE_NAME);
     }
 
-    /** 接続とテーブル作成を行い、保存済みの全役職を読み込む（起動時に一度だけ同期実行） */
-    public LoadResult open() {
-        return CompletableFuture.supplyAsync(() -> {
+    /** 保存済みの全役職を読み込む（起動時に一度だけ同期実行） */
+    public LoadResult load() {
+        if (!Files.isRegularFile(file)) return new LoadResult(Map.of(), Map.of());
+
+        YamlConfiguration yml = new YamlConfiguration();
+        try {
+            yml.loadFromString(Files.readString(file, StandardCharsets.UTF_8));
+        } catch (IOException | InvalidConfigurationException e) {
+            Path backup = file.resolveSibling(FILE_NAME + ".broken-" + TIMESTAMP.format(LocalDateTime.now()));
             try {
-                dbFile.getParentFile().mkdirs();
-                Class.forName("org.sqlite.JDBC");
-                connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
-                try (Statement stmt = connection.createStatement()) {
-                    stmt.execute("PRAGMA journal_mode = WAL");
-                    stmt.execute("PRAGMA synchronous = NORMAL");
-                    stmt.execute("""
-                            CREATE TABLE IF NOT EXISTS roles (
-                                id TEXT PRIMARY KEY,
-                                display_name TEXT NOT NULL,
-                                icon BLOB,
-                                equipment BLOB,
-                                inventory BLOB,
-                                hotbar BLOB,
-                                effects TEXT,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )""");
-                    stmt.execute("""
-                            CREATE TABLE IF NOT EXISTS deleted_roles (
-                                id TEXT PRIMARY KEY,
-                                effects TEXT,
-                                deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )""");
+                Files.copy(file, backup);
+                logger.log(Level.SEVERE, FILE_NAME + " を読み込めませんでした。" + backup.getFileName()
+                        + " に退避し、役職なしで起動します", e);
+            } catch (IOException copyError) {
+                logger.log(Level.SEVERE, FILE_NAME + " を読み込めず、退避もできませんでした", copyError);
+            }
+            return new LoadResult(Map.of(), Map.of());
+        }
+
+        int format = yml.getInt("format", RoleYaml.FORMAT);
+        Map<String, Role> roles = new LinkedHashMap<>();
+        ConfigurationSection rolesSection = yml.getConfigurationSection("roles");
+        if (rolesSection != null) {
+            for (String id : rolesSection.getKeys(false)) {
+                ConfigurationSection section = rolesSection.getConfigurationSection(id);
+                if (section == null) continue;
+                try {
+                    roles.put(id, RoleYaml.read(section, id, format, logger));
+                } catch (RuntimeException e) {
+                    logger.log(Level.WARNING, "役職の読み込みに失敗しました: " + id, e);
                 }
-                return new LoadResult(loadAll(), loadDeleted());
-            } catch (ClassNotFoundException | SQLException e) {
-                logger.log(Level.SEVERE, "SQLiteデータベースに接続できませんでした。メモリのみで動作します。", e);
-                connection = null;
-                return new LoadResult(List.of(), Map.of());
-            }
-        }, executor).join();
-    }
-
-    private Map<String, String> loadDeleted() throws SQLException {
-        Map<String, String> result = new HashMap<>();
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT id, effects FROM deleted_roles")) {
-            while (rs.next()) result.put(rs.getString(1), rs.getString(2));
-        }
-        return result;
-    }
-
-    public void markDeleted(String id, String effects) {
-        submit("mark deleted " + id, () -> {
-            try (PreparedStatement stmt = connection.prepareStatement(
-                    "INSERT OR REPLACE INTO deleted_roles (id, effects) VALUES (?, ?)")) {
-                stmt.setString(1, id);
-                stmt.setString(2, effects);
-                stmt.executeUpdate();
-            }
-        });
-    }
-
-    public void unmarkDeleted(String id) {
-        submit("unmark deleted " + id, () -> {
-            try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM deleted_roles WHERE id = ?")) {
-                stmt.setString(1, id);
-                stmt.executeUpdate();
-            }
-        });
-    }
-
-    public boolean isConnected() {
-        return connection != null;
-    }
-
-    private List<StoredRole> loadAll() throws SQLException {
-        List<StoredRole> result = new ArrayList<>();
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(
-                     "SELECT id, display_name, icon, equipment, inventory, hotbar, effects FROM roles")) {
-            while (rs.next()) {
-                result.add(new StoredRole(rs.getString(1), rs.getString(2), rs.getBytes(3),
-                        rs.getBytes(4), rs.getBytes(5), rs.getBytes(6), rs.getString(7)));
             }
         }
-        return result;
-    }
 
-    public void save(StoredRole role) {
-        submit("save " + role.id(), () -> {
-            try (PreparedStatement stmt = connection.prepareStatement(UPSERT)) {
-                stmt.setString(1, role.id());
-                stmt.setString(2, role.displayName());
-                stmt.setBytes(3, role.icon());
-                stmt.setBytes(4, role.equipment());
-                stmt.setBytes(5, role.inventory());
-                stmt.setBytes(6, role.hotbar());
-                stmt.setString(7, role.effects());
-                stmt.executeUpdate();
+        Map<String, Map<PotionEffectType, Integer>> deleted = new HashMap<>();
+        ConfigurationSection deletedSection = yml.getConfigurationSection("deleted");
+        if (deletedSection != null) {
+            for (String id : deletedSection.getKeys(false)) {
+                deleted.put(id, RoleYaml.readEffects(deletedSection.getConfigurationSection(id)));
             }
-        });
+        }
+        return new LoadResult(roles, deleted);
     }
 
-    public void delete(String id) {
-        submit("delete " + id, () -> {
-            try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM roles WHERE id = ?")) {
-                stmt.setString(1, id);
-                stmt.executeUpdate();
-            }
-        });
+    /** 全役職と削除済み役職を書き出す（メインスレッドから呼ぶ） */
+    public void save(Collection<Role> roles, Map<String, Map<PotionEffectType, Integer>> deleted) {
+        YamlConfiguration yml = new YamlConfiguration();
+        yml.options().setHeader(HEADER);
+        yml.set("format", RoleYaml.FORMAT);
+        yml.createSection("roles");
+        roles.stream().sorted(Comparator.comparing(Role::getId))
+                .forEach(role -> RoleYaml.write(yml.createSection("roles." + role.getId()), role));
+        yml.createSection("deleted");
+        deleted.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> yml.set("deleted." + entry.getKey(), RoleYaml.writeEffects(entry.getValue())));
+
+        if (pending.getAndSet(yml.saveToString()) == null && !executor.isShutdown()) {
+            executor.execute(this::flush);
+        }
     }
 
-    private interface SqlTask {
-        void run() throws SQLException;
-    }
-
-    private void submit(String description, SqlTask task) {
-        if (!isConnected() || executor.isShutdown()) return;
-        executor.execute(() -> {
+    private void flush() {
+        String content = pending.getAndSet(null);
+        if (content == null) return;
+        try {
+            Files.createDirectories(file.getParent());
+            Path temp = file.resolveSibling(FILE_NAME + ".tmp");
+            Files.writeString(temp, content, StandardCharsets.UTF_8);
             try {
-                task.run();
-            } catch (SQLException e) {
-                logger.log(Level.SEVERE, "データベース処理に失敗しました: " + description, e);
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
             }
-        });
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, FILE_NAME + " への保存に失敗しました", e);
+        }
     }
 
-    /** 未処理の書き込みをすべて終えてから接続を閉じる */
+    /** 未処理の書き込みをすべて終える */
     public void close() {
         executor.shutdown();
         try {
-            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                logger.warning("データベースへの書き込みが時間内に終わりませんでした");
+            if (executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                flush(); // 停止の直前に積まれた分
+            } else {
+                logger.warning(FILE_NAME + " への書き込みが時間内に終わりませんでした");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException e) {
-                logger.log(Level.WARNING, "データベース接続のクローズに失敗しました", e);
-            }
         }
     }
 }

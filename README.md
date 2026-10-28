@@ -15,7 +15,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 - **永続効果** — 時間無制限で付与し、牛乳や不死のトーテムでは消えない。役職を保存すると保持者の効果もすぐ更新される
 - **エクスポート／インポート** — 役職を YAML で共有できる。KnightsEditor で出力したファイルも読み込める
 - **監査ログ** — 役職の操作を日別ファイルと管理者のチャットに記録
-- **軽量** — データベースへの書き込みやファイル操作は別スレッドで行い、サーバーの TPS を下げない
+- **軽量** — 役職データの保存やファイル操作は別スレッドで行い、サーバーの TPS を下げない
 
 ## 動作環境
 
@@ -23,8 +23,6 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 |---|---|
 | サーバー | Paper 26.1.2 |
 | Java | 25 |
-
-初回起動時に SQLite ドライバ（`org.xerial:sqlite-jdbc`）を自動でダウンロードします。サーバーがインターネットに接続できる必要があります。
 
 ## 導入方法
 
@@ -174,15 +172,20 @@ settings:
 ```
 plugins/HANNYOU-Plugin/
 ├── config.yml            # 設定
-├── roles.db              # 役職データ (SQLite)
+├── knights-role.yml      # 役職データ
 ├── exports/              # エクスポートしたファイル／インポートするファイル
 └── logs/
     └── audit-YYYY-MM-DD.log   # 監査ログ
 ```
 
+`knights-role.yml` は役職を作成・編集・削除するたびに自動で書き出されます。形式はエクスポートファイルと同じなので、`exports/` にコピーすればほかのサーバーでもインポートできます。
+
+> [!NOTE]
+> 手で編集するときは、サーバーを止めてから編集してください。動いている間に編集すると、次の保存で上書きされます。読み込めない状態になっていた場合は `knights-role.yml.broken-<日時>` に退避し、役職なしで起動します。
+
 ### KnightsEditor からの移行
 
-データベースの形式が違うため、`knights_editor.db` はそのまま使えません。
+保存形式が違うため、`knights_editor.db` はそのまま使えません。
 
 1. KnightsEditor 側で `/knights export all` を実行します
 2. 出力された `roles_all_*.yml` を `plugins/HANNYOU-Plugin/exports/` に置きます

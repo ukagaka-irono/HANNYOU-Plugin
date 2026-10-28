@@ -1,6 +1,5 @@
 package com.ukagaka.irono.hANNYOUPlugin.role;
 
-import com.ukagaka.irono.hANNYOUPlugin.storage.ItemCodec;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -15,12 +14,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntSupplier;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
- * 役職のメモリキャッシュ。起動時に全件読み込むので、参照時にDBへ問い合わせることはない。
+ * 役職のメモリキャッシュ。起動時に knights-role.yml から全件読み込むので、参照時にファイルを読むことはない。
  * タブ補完は非同期スレッドから呼ばれることがあるため ConcurrentHashMap を使う。
  */
 public final class RoleManager {
@@ -39,16 +37,15 @@ public final class RoleManager {
 
     public void load(RoleStorage.LoadResult result, Logger logger) {
         roles.clear();
-        for (RoleStorage.StoredRole row : result.roles()) {
-            try {
-                roles.put(row.id(), row.toRole());
-            } catch (RuntimeException e) {
-                logger.log(Level.WARNING, "役職の読み込みに失敗しました: " + row.id(), e);
-            }
-        }
+        roles.putAll(result.roles());
         deleted.clear();
-        result.deletedRoles().forEach((id, effects) -> deleted.put(id, ItemCodec.decodeEffects(effects)));
+        result.deletedRoles().forEach((id, effects) -> deleted.put(id, Map.copyOf(effects)));
         logger.info(roles.size() + "件の役職を読み込みました");
+    }
+
+    /** 現在の内容を knights-role.yml に書き出す */
+    private void persist() {
+        storage.save(roles.values(), deleted);
     }
 
     public Role get(String id) {
@@ -87,24 +84,23 @@ public final class RoleManager {
 
     public void save(Role role) {
         roles.put(role.getId(), role);
-        storage.save(RoleStorage.StoredRole.of(role));
-        if (deleted.remove(role.getId()) != null) storage.unmarkDeleted(role.getId());
+        deleted.remove(role.getId());
+        persist();
     }
 
     /** 役職を削除し、削除済みとして記録する（プレイヤー側の後始末は RoleApplier#deleteRole） */
     public Role delete(String id) {
         Role removed = roles.remove(id);
         if (removed != null) {
-            storage.delete(id);
             deleted.put(id, Map.copyOf(removed.getEffects()));
-            storage.markDeleted(id, ItemCodec.encodeEffects(removed.getEffects()));
+            persist();
         }
         return removed;
     }
 
     /** IDを変更して保存する。オンラインプレイヤーの役職タグも付け替える（旧IDは削除済み扱いにしない） */
     public void rename(String oldId, Role role) {
-        if (roles.remove(oldId) != null) storage.delete(oldId);
+        roles.remove(oldId);
         save(role);
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (online.removeScoreboardTag(oldId)) {
