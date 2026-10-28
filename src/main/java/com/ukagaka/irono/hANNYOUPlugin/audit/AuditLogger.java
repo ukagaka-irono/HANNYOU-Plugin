@@ -58,9 +58,10 @@ public final class AuditLogger {
         String executorName = executor instanceof Player player ? player.getName() : "SYSTEM";
         boolean hasDetail = detail != null && !detail.isEmpty();
         LocalDateTime now = LocalDateTime.now();
+        // 改行で偽の行を書き込まれないよう、制御文字は空白にする
         String message = String.format("[%s] [%s] %s -> RoleID: %s%s",
                 LOG_DATE.format(now), action.getDisplayName(), executorName, roleId,
-                hasDetail ? " | " + detail : "");
+                hasDetail ? " | " + detail : "").replaceAll("\\p{Cntrl}", " ");
 
         Path file = logFolder.resolve("audit-" + FILE_DATE.format(now) + ".log");
         if (!writer.isShutdown()) {

@@ -19,6 +19,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
@@ -27,6 +28,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -41,6 +43,7 @@ import java.util.UUID;
  * 体は透明化の効果、装備と手持ちは見る側にだけ空気を送ることで隠し、名前はチーム設定で隠す。
  * スペク中の人同士はチームの「味方の透明を見る」設定で半透明に見える。
  * 状態はプレイヤーデータ(PDC)に保存するので、ログアウトや再起動をまたいで続く。
+ * クリエイティブのアイテムを持ち帰れないよう、開始時の持ち物を保存しておき、解除時に戻す。
  */
 public final class SpecManager implements Listener {
     private static final String TEAM_NAME = "hannyou_spec";
@@ -58,6 +61,8 @@ public final class SpecManager implements Listener {
     private final NamespacedKey gameModeKey;
     /** スペク開始前に入っていたチーム（なければ空文字） */
     private final NamespacedKey teamKey;
+    /** スペク開始時の持ち物（解除時に戻す） */
+    private final NamespacedKey itemsKey;
     private final Set<UUID> pendingMask = new HashSet<>();
     private BukkitTask task;
 
@@ -65,6 +70,7 @@ public final class SpecManager implements Listener {
         this.plugin = plugin;
         this.gameModeKey = new NamespacedKey(plugin, "spec_gamemode");
         this.teamKey = new NamespacedKey(plugin, "spec_team");
+        this.itemsKey = new NamespacedKey(plugin, "spec_items");
     }
 
     /** 毎秒、装備の隠し直し（取りこぼし対策）とアクションバー表示を行う。オンラインのスペク中の人に状態を再適用する */
@@ -92,11 +98,14 @@ public final class SpecManager implements Listener {
     /** @return スペクモードにしたら true（すでにスペク中なら false） */
     public boolean enable(Player player) {
         if (isSpec(player)) return false;
+        plugin.getTrialManager().end(player, false); // 試着中の持ち物ではなく、本来の持ち物を保存する
         PersistentDataContainer pdc = player.getPersistentDataContainer();
         pdc.set(gameModeKey, PersistentDataType.STRING, player.getGameMode().name());
         Team current = scoreboard().getEntryTeam(player.getName());
         pdc.set(teamKey, PersistentDataType.STRING,
                 current == null || current.getName().equals(TEAM_NAME) ? "" : current.getName());
+        rememberInventory(player);
+        player.saveData(); // サーバーが落ちても保存した持ち物が残るよう即保存
 
         applyState(player);
         player.sendMessage(Text.of("§7スペクモードになりました（ほかのプレイヤーからは見えません）"));
@@ -109,10 +118,13 @@ public final class SpecManager implements Listener {
         PersistentDataContainer pdc = player.getPersistentDataContainer();
         String gameMode = pdc.get(gameModeKey, PersistentDataType.STRING);
         String previousTeam = pdc.get(teamKey, PersistentDataType.STRING);
+        byte[] items = pdc.get(itemsKey, PersistentDataType.BYTE_ARRAY);
         pdc.remove(gameModeKey); // 先に外して、ゲームモード変更の禁止に引っかからないようにする
         pdc.remove(teamKey);
+        pdc.remove(itemsKey);
 
         player.setGameMode(parseGameMode(gameMode));
+        if (items != null) restoreInventory(player, items);
         player.setCollidable(true);
         PotionEffect invisibility = player.getPotionEffect(PotionEffectType.INVISIBILITY);
         if (invisibility != null && invisibility.isInfinite()) player.removePotionEffect(PotionEffectType.INVISIBILITY);
@@ -134,6 +146,26 @@ public final class SpecManager implements Listener {
         player.sendActionBar(Text.of(""));
         player.sendMessage(Text.of("§aスペクモードを解除しました"));
         return true;
+    }
+
+    /**
+     * 今の持ち物を、解除時に戻す内容として保存する。
+     * スペク中に役職が配られたときも呼び、配られた持ち物を解除後に残す。
+     */
+    public void rememberInventory(Player player) {
+        if (!isSpec(player)) return;
+        player.getPersistentDataContainer().set(itemsKey, PersistentDataType.BYTE_ARRAY,
+                ItemStack.serializeItemsAsBytes(Arrays.asList(player.getInventory().getContents())));
+    }
+
+    private static void restoreInventory(Player player, byte[] items) {
+        PlayerInventory inv = player.getInventory();
+        ItemStack[] saved = ItemStack.deserializeItemsFromBytes(items);
+        ItemStack[] contents = new ItemStack[inv.getSize()];
+        for (int i = 0; i < Math.min(saved.length, contents.length); i++) {
+            contents[i] = saved[i] == null || saved[i].isEmpty() ? null : saved[i];
+        }
+        inv.setContents(contents);
     }
 
     private void applyState(Player player) {

@@ -1,6 +1,7 @@
 package com.ukagaka.irono.hANNYOUPlugin.gui;
 
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
+import com.ukagaka.irono.hANNYOUPlugin.Permissions;
 import com.ukagaka.irono.hANNYOUPlugin.util.Text;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -59,6 +60,27 @@ public abstract class BaseGUI implements InventoryHolder {
         return SIZE;
     }
 
+    /** hannyou.knights.menu だけの人も開ける画面なら true（中の操作は requireAdmin で個別に確かめる） */
+    protected boolean viewableWithoutAdmin() {
+        return false;
+    }
+
+    protected boolean isAdmin() {
+        return player.hasPermission(Permissions.KNIGHTS_ADMIN);
+    }
+
+    /** 管理者でなければ案内を出して false を返す */
+    protected boolean requireAdmin() {
+        if (isAdmin()) return true;
+        sendMessage("§cこの操作には権限 " + Permissions.KNIGHTS_ADMIN + " が必要です");
+        playErrorSound();
+        return false;
+    }
+
+    private boolean allowed() {
+        return viewableWithoutAdmin() || isAdmin();
+    }
+
     @Override
     public @NotNull Inventory getInventory() {
         return inventory;
@@ -69,6 +91,11 @@ public abstract class BaseGUI implements InventoryHolder {
     // ─────────────────────────────────────────────
 
     public void open() {
+        if (!allowed()) {
+            requireAdmin();
+            player.closeInventory();
+            return;
+        }
         show();
         playClickSound();
     }
@@ -180,13 +207,21 @@ public abstract class BaseGUI implements InventoryHolder {
     // イベント（GuiListenerから呼ばれる）
     // ─────────────────────────────────────────────
 
+    /** 開いている間に権限を外された場合も、操作させずに閉じる */
     final void dispatchClick(InventoryClickEvent event) {
-        if (transitioning) event.setCancelled(true);
-        else handleClick(event);
+        if (transitioning) {
+            event.setCancelled(true);
+        } else if (!allowed()) {
+            event.setCancelled(true);
+            requireAdmin();
+            closeLater();
+        } else {
+            handleClick(event);
+        }
     }
 
     final void dispatchDrag(InventoryDragEvent event) {
-        if (transitioning) event.setCancelled(true);
+        if (transitioning || !allowed()) event.setCancelled(true);
         else handleDrag(event);
     }
 

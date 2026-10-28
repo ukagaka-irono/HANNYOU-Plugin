@@ -1,6 +1,7 @@
 package com.ukagaka.irono.hANNYOUPlugin.storage;
 
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
+import com.ukagaka.irono.hANNYOUPlugin.role.RoleManager;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -82,6 +83,10 @@ public final class RoleStorage {
             for (String id : rolesSection.getKeys(false)) {
                 ConfigurationSection section = rolesSection.getConfigurationSection(id);
                 if (section == null) continue;
+                if (!RoleManager.ID_PATTERN.matcher(id).matches()) {
+                    logger.warning("IDが不正な役職を読み飛ばしました（半角英数字とアンダースコアのみ）: " + id);
+                    continue;
+                }
                 try {
                     roles.put(id, RoleYaml.read(section, id, format, logger));
                 } catch (RuntimeException e) {

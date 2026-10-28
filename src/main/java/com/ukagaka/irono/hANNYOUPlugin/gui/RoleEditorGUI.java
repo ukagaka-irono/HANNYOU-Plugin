@@ -75,7 +75,7 @@ public final class RoleEditorGUI extends BaseGUI {
             24, 25, 26, 27, 36};
     private static final Set<PotionEffectType> BUFFS = Set.copyOf(EFFECTS.subList(0, 19));
     private static final String[] ROMAN = {"", "I", "II", "III"};
-    private static final int MAX_EFFECT_LEVEL = 3;
+    private static final int MAX_EFFECT_LEVEL = Role.MAX_EFFECT_LEVEL;
 
     /** ポーションのボタンは種類×レベルで固定なので一度だけ作る */
     private static final Map<PotionEffectType, ItemStack[]> POTION_CACHE = new HashMap<>();

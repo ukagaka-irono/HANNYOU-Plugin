@@ -35,7 +35,8 @@ import java.util.logging.Level;
 public final class RoleTransfer {
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
-    public record ImportResult(int added, int skipped, int limited) {}
+    /** invalid = IDが不正（半角英数字とアンダースコア以外を含む）で読み込まなかった件数 */
+    public record ImportResult(int added, int skipped, int limited, int invalid) {}
 
     private final HANNYOUPlugin plugin;
     private final Path exportFolder;
@@ -146,8 +147,14 @@ public final class RoleTransfer {
     /** 読み込んだ役職を登録する（overwrite=false の場合は既存IDをスキップ） */
     public ImportResult register(Map<String, Role> imported, boolean overwrite, CommandSender executor, String fileName) {
         RoleManager roles = plugin.getRoleManager();
-        int added = 0, skipped = 0, limited = 0;
+        int added = 0, skipped = 0, limited = 0, invalid = 0;
         for (Role role : imported.values()) {
+            // ファイル名・タグ・クリックできるコマンドに使うので、エディタと同じ規則のIDだけ受け付ける
+            if (!RoleManager.ID_PATTERN.matcher(role.getId()).matches()) {
+                plugin.getLogger().warning("IDが不正な役職を読み込みませんでした: " + role.getId());
+                invalid++;
+                continue;
+            }
             boolean exists = roles.exists(role.getId());
             if (exists && !overwrite) {
                 skipped++;
@@ -164,6 +171,6 @@ public final class RoleTransfer {
                     "file: " + fileName + (overwrite ? " [上書き]" : ""));
             added++;
         }
-        return new ImportResult(added, skipped, limited);
+        return new ImportResult(added, skipped, limited, invalid);
     }
 }

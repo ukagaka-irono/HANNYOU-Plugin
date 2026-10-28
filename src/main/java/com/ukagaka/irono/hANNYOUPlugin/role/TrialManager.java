@@ -55,6 +55,12 @@ public final class TrialManager implements Listener {
      * @param onEnd 試着終了時に実行する処理（null可）
      */
     public void start(Player player, Role role, Runnable onEnd) {
+        // スペク中の持ち物は解除時に戻すため、試着の退避と重ねるとアイテムが増える
+        if (plugin.getSpecManager().isSpec(player)) {
+            player.sendMessage(Text.of("§cスペク中は試着できません"));
+            if (onEnd != null) onEnd.run();
+            return;
+        }
         if (!isTrying(player)) backup(player);
 
         PlayerInventory inv = player.getInventory();

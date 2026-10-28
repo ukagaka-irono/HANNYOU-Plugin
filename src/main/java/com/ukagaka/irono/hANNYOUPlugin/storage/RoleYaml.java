@@ -49,7 +49,9 @@ public final class RoleYaml {
 
     /** 読み込めないアイテムは警告を出して空にする */
     public static Role read(ConfigurationSection section, String id, int format, Logger logger) {
-        Role role = new Role(id, section.getString("display_name", "インポートされた役職"));
+        // 改行などの制御文字はログやチャットの表示を崩すので取り除く
+        String displayName = section.getString("display_name", "").replaceAll("\\p{Cntrl}", "");
+        Role role = new Role(id, displayName.isBlank() ? "インポートされた役職" : displayName);
         role.setIcon(decode(section.getString("icon"), format, id, logger));
 
         ConfigurationSection equipment = section.getConfigurationSection("equipment");
@@ -76,7 +78,7 @@ public final class RoleYaml {
         if (section == null) return effects;
         for (String key : section.getKeys(false)) {
             PotionEffectType type = ItemCodec.effectType(key);
-            int level = section.getInt(key);
+            int level = Math.min(section.getInt(key), Role.MAX_EFFECT_LEVEL);
             if (type != null && level > 0) effects.put(type, level);
         }
         return effects;

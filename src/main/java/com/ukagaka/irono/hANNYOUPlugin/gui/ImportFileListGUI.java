@@ -72,6 +72,7 @@ public final class ImportFileListGUI extends BaseGUI {
             sendMessage("§aインポート完了: §f" + result.added() + "件追加"
                     + (result.skipped() > 0 ? "§e, " + result.skipped() + "件スキップ" : ""));
             if (result.skipped() > 0) sendMessage("§7右クリックで上書きインポートできます");
+            if (result.invalid() > 0) sendMessage("§cIDが不正なため " + result.invalid() + "件を読み込みませんでした（半角英数字とアンダースコアのみ使えます）");
             if (result.limited() > 0) {
                 sendMessage("§c役職数の上限(" + plugin.getRoleManager().maxRoles() + ")に達したため "
                         + result.limited() + "件を追加できませんでした");

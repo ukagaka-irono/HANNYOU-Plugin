@@ -35,6 +35,7 @@ public final class RoleApplier implements Listener {
         player.addScoreboardTag(role.getId());
         if (previous != null) clearEffects(player, previous.getEffects().keySet());
         applyItems(player, role);
+        plugin.getSpecManager().rememberInventory(player);
         applyEffects(player, role);
     }
 
@@ -120,7 +121,10 @@ public final class RoleApplier implements Listener {
 
         Role role = roles.findRole(player);
         if (role == null) return;
-        if (plugin.getPluginConfig().reapplyItemsOnJoin()) applyItems(player, role);
+        if (plugin.getPluginConfig().reapplyItemsOnJoin()) {
+            applyItems(player, role);
+            plugin.getSpecManager().rememberInventory(player);
+        }
         applyEffects(player, role);
     }
 

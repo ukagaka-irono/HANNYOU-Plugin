@@ -2,12 +2,16 @@ package com.ukagaka.irono.hANNYOUPlugin.storage;
 
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
+import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.io.BukkitObjectInputStream;
 
 import java.io.ByteArrayInputStream;
+import java.io.ObjectInputFilter;
+import java.io.Serializable;
 import java.util.Base64;
+import java.util.Set;
 
 /**
  * アイテム・ポーション効果のシリアライズ。
@@ -15,6 +19,35 @@ import java.util.Base64;
  * Minecraftのバージョンアップ時もDataFixerで自動変換される。
  */
 public final class ItemCodec {
+    /**
+     * 旧形式の読み込みで復元してよいクラスのパッケージ。Java直列化は任意のクラスを復元できてしまうため、
+     * アイテムの復元に必要な値・コレクションと Bukkit のラッパー以外は拒否する（共有されたファイル対策）。
+     */
+    private static final Set<String> LEGACY_PACKAGES = Set.of("java.lang", "java.util", "com.google.common.collect");
+    private static final String LEGACY_WRAPPER = "org.bukkit.util.io.Wrapper";
+    private static final int LEGACY_MAX_DEPTH = 16;
+    private static final int LEGACY_MAX_REFS = 10_000;
+    private static final int LEGACY_MAX_ARRAY = 10_000;
+
+    private static final ObjectInputFilter LEGACY_FILTER = info -> {
+        if (info.depth() > LEGACY_MAX_DEPTH || info.references() > LEGACY_MAX_REFS
+                || info.arrayLength() > LEGACY_MAX_ARRAY) {
+            return ObjectInputFilter.Status.REJECTED;
+        }
+        Class<?> type = info.serialClass();
+        if (type == null) return ObjectInputFilter.Status.ALLOWED;
+        while (type.isArray()) type = type.getComponentType();
+        if (type.isPrimitive() || LEGACY_PACKAGES.contains(type.getPackageName())
+                || type.getName().equals(LEGACY_WRAPPER)) {
+            return ObjectInputFilter.Status.ALLOWED;
+        }
+        // ラッパーから Bukkit の仕組みで作り直されたアイテム等。Serializable でない型はJava直列化では作れないので安全
+        if (ConfigurationSerializable.class.isAssignableFrom(type) && !Serializable.class.isAssignableFrom(type)) {
+            return ObjectInputFilter.Status.ALLOWED;
+        }
+        return ObjectInputFilter.Status.REJECTED;
+    };
+
     private ItemCodec() {}
 
     public static byte[] encode(ItemStack item) {
@@ -41,7 +74,8 @@ public final class ItemCodec {
         if (data == null || data.isEmpty()) return null;
         try (BukkitObjectInputStream in = new BukkitObjectInputStream(
                 new ByteArrayInputStream(Base64.getMimeDecoder().decode(data)))) {
-            return (ItemStack) in.readObject();
+            in.setObjectInputFilter(LEGACY_FILTER);
+            return in.readObject() instanceof ItemStack item ? item : null;
         }
     }
 

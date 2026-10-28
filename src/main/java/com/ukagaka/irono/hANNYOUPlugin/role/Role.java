@@ -12,6 +12,8 @@ import java.util.Map;
 public final class Role {
     public static final int INVENTORY_SIZE = 27;
     public static final int HOTBAR_SIZE = 9;
+    /** 効果レベルの上限（エディタで選べる I〜III） */
+    public static final int MAX_EFFECT_LEVEL = 3;
 
     public enum EquipmentSlot {
         HELMET, CHESTPLATE, LEGGINGS, BOOTS, OFFHAND

@@ -406,6 +406,7 @@ public final class KnightsCommand {
             }
             RoleTransfer.ImportResult result = transfer.register(imported, overwrite, sender, fileName);
             send(sender, "§aインポート完了: " + result.added() + "件追加, " + result.skipped() + "件スキップ");
+            if (result.invalid() > 0) send(sender, "§cIDが不正なため " + result.invalid() + "件を読み込みませんでした（半角英数字とアンダースコアのみ使えます）");
             if (result.limited() > 0) {
                 send(sender, "§c役職数の上限(" + plugin.getRoleManager().maxRoles() + ")に達したため "
                         + result.limited() + "件を追加できませんでした");
