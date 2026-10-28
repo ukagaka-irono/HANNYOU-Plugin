@@ -5,7 +5,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -58,14 +57,6 @@ public final class RoleManager {
 
     public boolean exists(String id) {
         return roles.containsKey(id);
-    }
-
-    public int size() {
-        return roles.size();
-    }
-
-    public Collection<Role> all() {
-        return Collections.unmodifiableCollection(roles.values());
     }
 
     public Set<String> ids() {

@@ -95,8 +95,10 @@ public final class RoleListGUI extends BaseGUI {
                     });
         }
 
-        button(49, Items.item(Material.ARROW, "§bメインメニューに戻る"),
-                e -> { playClickSound(); switchTo(new MainMenuGUI(plugin, player)); });
+        button(49, Items.item(Material.IRON_SWORD, "§a兵士の作成",
+                        "§7新しい役職を作るエディタを開きます",
+                        "§aクリックで開く"),
+                e -> { playClickSound(); switchTo(RoleEditorGUI.create(plugin, player)); });
     }
 
     /** コピー先の role id を入力してもらう */
