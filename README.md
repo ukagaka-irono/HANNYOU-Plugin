@@ -105,7 +105,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 
 ### スペクモード
 
-`/hannyou knights spec <対象>` で、観戦や進行役に向いた特別なクリエイティブモードにします。`/hannyou knights unspec <対象>` で解除すると、元のゲームモードに戻ります。
+`/hannyou knights spec [対象]` で、観戦や進行役に向いた特別なクリエイティブモードにします。`/hannyou knights unspec [対象]` で解除すると、元のゲームモードに戻ります。対象を省略すると自分自身が対象になります。
 
 - **見えない** — 体・装備・手に持った物・名前が、ほかのプレイヤーから見えなくなります（管理者も含む）。スペク中の人同士は半透明で見えます。タブリストには表示されたままです。
 - **ぶつからない** — プレイヤーや Mob を押したり押されたりせず、矢などの飛び道具もすり抜けます。感圧板・トリップワイヤー・スカルクセンサーも反応しません。
@@ -133,8 +133,8 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 | `/hannyou knights untry` | 試着を終了する |
 | `/hannyou knights assign <役職ID>` | 付与するプレイヤーを GUI で選ぶ |
 | `/hannyou knights edit <役職ID>` | エディタを開く |
-| `/hannyou knights spec <対象>` | [スペクモード](#スペクモード)にする |
-| `/hannyou knights unspec <対象>` | スペクモードを解除する |
+| `/hannyou knights spec [対象]` | [スペクモード](#スペクモード)にする（省略時は自分） |
+| `/hannyou knights unspec [対象]` | スペクモードを解除する（省略時は自分） |
 | `/hannyou knights roleremove <役職ID>` | 削除の確認画面を開き、「削除する」か「やめる」を選ぶ |
 | `/hannyou knights export [役職ID\|all]` | YAML に出力する（省略時は全件） |
 | `/hannyou knights import [ファイル名] [overwrite]` | YAML から読み込む（省略時はファイル一覧を表示） |

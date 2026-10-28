@@ -109,10 +109,12 @@ public final class KnightsCommand {
                                         .executes(ctx -> clear(ctx, true)))))
                 .then(Commands.literal("spec")
                         .requires(ADMIN)
+                        .executes(ctx -> specSelf(ctx.getSource().getSender(), true))
                         .then(Commands.argument("targets", ArgumentTypes.players())
                                 .executes(ctx -> spec(ctx, true))))
                 .then(Commands.literal("unspec")
                         .requires(ADMIN)
+                        .executes(ctx -> specSelf(ctx.getSource().getSender(), false))
                         .then(Commands.argument("targets", ArgumentTypes.players())
                                 .executes(ctx -> spec(ctx, false))))
                 .then(Commands.literal("roleremove")
@@ -346,7 +348,21 @@ public final class KnightsCommand {
             send(sender, "§eNo matching players found.");
             return 0;
         }
+        return spec(sender, targets, enable);
+    }
 
+    /** 対象を省略したときは自分自身 */
+    private int specSelf(CommandSender sender, boolean enable) {
+        Player player = requirePlayer(sender);
+        if (player == null) return 0;
+        if (enable ? plugin.getSpecManager().isSpec(player) : !plugin.getSpecManager().isSpec(player)) {
+            send(sender, enable ? "§eすでにスペク中です" : "§eスペク中ではありません");
+            return 0;
+        }
+        return spec(sender, List.of(player), enable);
+    }
+
+    private int spec(CommandSender sender, List<Player> targets, boolean enable) {
         int changed = 0;
         for (Player target : targets) {
             boolean done = enable
@@ -464,8 +480,8 @@ public final class KnightsCommand {
             {"untry", "", "試着を終了"},
             {"assign", " <role_id>", "付与するプレイヤーをGUIで選ぶ"},
             {"edit", " <role_id>", "エディタを開く"},
-            {"spec", " <player|@selector>", "見えない・ぶつからない・操作できないクリエイティブにする"},
-            {"unspec", " <player|@selector>", "スペクモードを解除"},
+            {"spec", " [player|@selector]", "見えない・ぶつからない・操作できないクリエイティブにする"},
+            {"unspec", " [player|@selector]", "スペクモードを解除"},
             {"roleremove", " <role_id>", "削除の確認画面を開く"},
             {"export", " [role_id|all]", "Export role(s) to YAML"},
             {"import", " [filename] [overwrite]", "Import role(s) from YAML"},
