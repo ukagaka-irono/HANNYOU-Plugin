@@ -32,8 +32,6 @@ import java.util.UUID;
  * ログアウトやサーバー停止をまたいでも次の参加時に元へ戻せる。役職タグは付けない。
  */
 public final class TrialManager implements Listener {
-    public static final String UNTRY_COMMAND = "/hannyou knights untry";
-
     private final HANNYOUPlugin plugin;
     private final NamespacedKey itemsKey;
     private final NamespacedKey effectsKey;
@@ -73,7 +71,9 @@ public final class TrialManager implements Listener {
         else returnActions.remove(player.getUniqueId());
 
         player.sendMessage(Text.of("§a役職「" + role.getDisplayName() + "§a」を試着中です ")
-                .append(Text.runButton("§c§l【試着を終了】", UNTRY_COMMAND, "§7持ち物と効果を試着前に戻します")));
+                .append(Text.callbackButton("§c§l【試着を終了】", "§7持ち物と効果を試着前に戻します", 1, p -> {
+                    if (!end(p, true)) p.sendMessage(Text.of("§e試着中ではありません"));
+                })));
     }
 
     /**

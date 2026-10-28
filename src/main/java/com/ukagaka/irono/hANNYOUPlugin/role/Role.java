@@ -1,5 +1,6 @@
 package com.ukagaka.irono.hANNYOUPlugin.role;
 
+import com.ukagaka.irono.hANNYOUPlugin.util.Text;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
@@ -7,6 +8,7 @@ import org.bukkit.potion.PotionEffectType;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public final class Role {
     public static final int INVENTORY_SIZE = 27;
@@ -18,8 +20,15 @@ public final class Role {
         HELMET, CHESTPLATE, LEGGINGS, BOOTS, OFFHAND
     }
 
+    /**
+     * 表には出ない識別番号。role id を変えても変わらず、同じ role id で作り直すと別の番号になる。
+     * プレイヤー側にも記録して、オフライン中の名前変更や削除・作り直しを見分けるのに使う。
+     */
+    private String uid = UUID.randomUUID().toString();
     private String id;
     private String displayName;
+    /** 色を除いた表示名（検索用。表示名が変わったら null にする） */
+    private String plainName;
     private ItemStack icon;
     private final EnumMap<EquipmentSlot, ItemStack> equipment = new EnumMap<>(EquipmentSlot.class);
     private final ItemStack[] inventory = new ItemStack[INVENTORY_SIZE];
@@ -32,7 +41,7 @@ public final class Role {
         this.icon = new ItemStack(Material.STONE);
     }
 
-    /** 全アイテムを複製したディープコピーを作る（編集用の作業コピーや役職の複製に使う） */
+    /** 全アイテムを複製した、別の役職としてのコピーを作る（識別番号は新しくなる） */
     public Role copy(String newId, String newDisplayName) {
         Role copy = new Role(newId, newDisplayName);
         copy.icon = icon.clone();
@@ -43,15 +52,30 @@ public final class Role {
         return copy;
     }
 
+    /** 編集用の作業コピー（同じ役職なので識別番号も同じ） */
     public Role copy() {
-        return copy(id, displayName);
+        Role copy = copy(id, displayName);
+        copy.uid = uid;
+        return copy;
     }
+
+    public String getUid() { return uid; }
+    public void setUid(String uid) { this.uid = uid; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
     public String getDisplayName() { return displayName; }
-    public void setDisplayName(String displayName) { this.displayName = displayName; }
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+        this.plainName = null;
+    }
+
+    /** 色を除いた表示名（検索で毎回変換しないよう覚えておく） */
+    public String getPlainName() {
+        if (plainName == null) plainName = Text.strip(displayName);
+        return plainName;
+    }
 
     public ItemStack getIcon() { return icon; }
     public void setIcon(ItemStack icon) {

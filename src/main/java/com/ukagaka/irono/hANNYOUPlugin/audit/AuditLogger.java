@@ -15,9 +15,7 @@ public final class AuditLogger {
         ROLE_EDIT("編集"),
         ROLE_DELETE("削除"),
         ROLE_COPY("コピー"),
-        ROLE_APPLY("付与"),
-        ROLE_EXPORT("エクスポート"),
-        ROLE_IMPORT("インポート");
+        ROLE_APPLY("付与");
 
         private final String displayName;
         Action(String displayName) { this.displayName = displayName; }

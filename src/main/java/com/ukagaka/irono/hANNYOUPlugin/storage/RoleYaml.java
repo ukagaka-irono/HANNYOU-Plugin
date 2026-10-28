@@ -11,24 +11,28 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * 役職とYAMLの相互変換。knights-role.yml とエクスポートファイルで同じ形式を使う。
+ * 役職と knights-role.yml の相互変換。
  * アイテムは Paper のバイナリ形式を Base64 にした文字列で持つ。
  */
 public final class RoleYaml {
-    /** 1 = KnightsEditor形式（Java直列化）、2 = Paperバイナリ形式 */
+    /** knights-role.yml の形式のバージョン（2 = Paperバイナリ形式） */
     public static final int FORMAT = 2;
 
     private RoleYaml() {}
 
-    public static void write(ConfigurationSection section, Role role) {
-        section.set("display_name", role.getDisplayName());
-        section.set("icon", encode(role.getIcon()));
+    /** 役職を YAML に書く内容に変換する（アイテムの変換が重いので、結果は RoleStorage で使い回す） */
+    public static Map<String, Object> toMap(Role role) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("uid", role.getUid());
+        map.put("display_name", role.getDisplayName());
+        map.put("icon", encode(role.getIcon()));
         Map<String, String> equipment = new LinkedHashMap<>();
         role.getEquipment().forEach((slot, item) -> equipment.put(slot.name(), encode(item)));
-        section.set("equipment", equipment);
-        writeItems(section, "inventory", role.getInventory());
-        writeItems(section, "hotbar", role.getHotbar());
-        section.set("effects", writeEffects(role.getEffects()));
+        map.put("equipment", equipment);
+        map.put("inventory", encodeItems(role.getInventory()));
+        map.put("hotbar", encodeItems(role.getHotbar()));
+        map.put("effects", writeEffects(role.getEffects()));
+        return map;
     }
 
     public static Map<String, Integer> writeEffects(Map<PotionEffectType, Integer> effects) {
@@ -37,10 +41,12 @@ public final class RoleYaml {
         return result;
     }
 
-    private static void writeItems(ConfigurationSection section, String path, ItemStack[] items) {
+    private static Map<String, String> encodeItems(ItemStack[] items) {
+        Map<String, String> result = new LinkedHashMap<>();
         for (int i = 0; i < items.length; i++) {
-            if (items[i] != null) section.set(path + "." + i, encode(items[i]));
+            if (items[i] != null) result.put(String.valueOf(i), encode(items[i]));
         }
+        return result;
     }
 
     private static String encode(ItemStack item) {
@@ -48,26 +54,28 @@ public final class RoleYaml {
     }
 
     /** 読み込めないアイテムは警告を出して空にする */
-    public static Role read(ConfigurationSection section, String id, int format, Logger logger) {
+    public static Role read(ConfigurationSection section, String id, Logger logger) {
         // 改行などの制御文字はログやチャットの表示を崩すので取り除く
         String displayName = section.getString("display_name", "").replaceAll("\\p{Cntrl}", "");
         Role role = new Role(id, displayName.isBlank() ? "インポートされた役職" : displayName);
-        role.setIcon(decode(section.getString("icon"), format, id, logger));
+        String uid = section.getString("uid");
+        if (uid != null && !uid.isBlank()) role.setUid(uid);
+        role.setIcon(decode(section.getString("icon"), id, logger));
 
         ConfigurationSection equipment = section.getConfigurationSection("equipment");
         if (equipment != null) {
             for (String slotName : equipment.getKeys(false)) {
                 try {
                     role.setEquipment(Role.EquipmentSlot.valueOf(slotName),
-                            decode(equipment.getString(slotName), format, id, logger));
+                            decode(equipment.getString(slotName), id, logger));
                 } catch (IllegalArgumentException ignored) {
                 }
             }
         }
 
-        readItems(section.getConfigurationSection("inventory"), Role.INVENTORY_SIZE, format, id, logger,
+        readItems(section.getConfigurationSection("inventory"), Role.INVENTORY_SIZE, id, logger,
                 role::setInventoryItem);
-        readItems(section.getConfigurationSection("hotbar"), Role.HOTBAR_SIZE, format, id, logger,
+        readItems(section.getConfigurationSection("hotbar"), Role.HOTBAR_SIZE, id, logger,
                 role::setHotbarItem);
         role.getEffects().putAll(readEffects(section.getConfigurationSection("effects")));
         return role;
@@ -88,22 +96,22 @@ public final class RoleYaml {
         void set(int index, ItemStack item);
     }
 
-    private static void readItems(ConfigurationSection section, int size, int format, String id, Logger logger,
+    private static void readItems(ConfigurationSection section, int size, String id, Logger logger,
                                   IndexedSetter setter) {
         if (section == null) return;
         for (String key : section.getKeys(false)) {
             try {
                 int index = Integer.parseInt(key);
-                if (index >= 0 && index < size) setter.set(index, decode(section.getString(key), format, id, logger));
+                if (index >= 0 && index < size) setter.set(index, decode(section.getString(key), id, logger));
             } catch (NumberFormatException ignored) {
             }
         }
     }
 
-    private static ItemStack decode(String data, int format, String roleId, Logger logger) {
+    private static ItemStack decode(String data, String roleId, Logger logger) {
         try {
-            return format >= 2 ? ItemCodec.decode(ItemCodec.fromBase64(data)) : ItemCodec.decodeLegacyBase64(data);
-        } catch (Exception e) {
+            return ItemCodec.decode(ItemCodec.fromBase64(data));
+        } catch (RuntimeException e) {
             logger.log(Level.WARNING, "アイテムを読み込めませんでした (役職: " + roleId + ")", e);
             return null;
         }

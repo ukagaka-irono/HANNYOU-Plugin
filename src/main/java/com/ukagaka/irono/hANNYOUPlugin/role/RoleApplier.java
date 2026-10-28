@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -13,18 +14,30 @@ import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.Collection;
 import java.util.Map;
 
-/** 役職の装備・インベントリ・永続効果をプレイヤーに適用する */
+/**
+ * 役職の装備・インベントリ・永続効果をプレイヤーに適用する。
+ * 役職はスコアボードタグ（role id）で判定するが、付与した役職の識別番号と role id をプレイヤーデータにも記録しておき、
+ * オフライン中に役職の名前が変わった・削除された・同じ role id で作り直された場合を参加時に見分ける。
+ */
 public final class RoleApplier implements Listener {
     private final HANNYOUPlugin plugin;
+    /** 付与した役職の識別番号 */
+    private final NamespacedKey roleUidKey;
+    /** 付与したときの role id（付いているはずのタグ） */
+    private final NamespacedKey roleIdKey;
 
     public RoleApplier(HANNYOUPlugin plugin) {
         this.plugin = plugin;
+        this.roleUidKey = new NamespacedKey(plugin, "role_uid");
+        this.roleIdKey = new NamespacedKey(plugin, "role_id");
     }
 
     /** 既存の役職タグを外して新しい役職を付与し、装備・インベントリ・効果を配布する */
@@ -33,9 +46,9 @@ public final class RoleApplier implements Listener {
         Role previous = plugin.getRoleManager().findRole(player);
         removeRoleTags(player);
         player.addScoreboardTag(role.getId());
+        remember(player, role);
         if (previous != null) clearEffects(player, previous.getEffects().keySet());
-        applyItems(player, role);
-        plugin.getSpecManager().rememberInventory(player);
+        plugin.getSpecManager().changeInventory(player, () -> applyItems(player, role));
         applyEffects(player, role);
     }
 
@@ -46,14 +59,40 @@ public final class RoleApplier implements Listener {
         }
     }
 
+    private void remember(Player player, Role role) {
+        PersistentDataContainer pdc = player.getPersistentDataContainer();
+        pdc.set(roleUidKey, PersistentDataType.STRING, role.getUid());
+        pdc.set(roleIdKey, PersistentDataType.STRING, role.getId());
+    }
+
+    private void forget(Player player) {
+        PersistentDataContainer pdc = player.getPersistentDataContainer();
+        pdc.remove(roleUidKey);
+        pdc.remove(roleIdKey);
+    }
+
     /** 役職を削除し、オンラインの保持者からタグと効果を外す（オフラインの保持者は参加時に外す） */
     public void deleteRole(CommandSender executor, Role role) {
         plugin.getRoleManager().delete(role.getId());
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (online.removeScoreboardTag(role.getId())) clearEffects(online, role.getEffects().keySet());
+            if (role.getUid().equals(online.getPersistentDataContainer().get(roleUidKey, PersistentDataType.STRING))) {
+                forget(online);
+            }
         }
         plugin.getAuditLogger().log(executor, AuditLogger.Action.ROLE_DELETE, role.getId(),
                 "表示名: " + role.getDisplayName());
+    }
+
+    /** role id を変更して保存し、オンラインの保持者のタグも付け替える（オフラインの保持者は参加時に付け替える） */
+    public void renameRole(String oldId, Role role) {
+        plugin.getRoleManager().rename(oldId, role);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.removeScoreboardTag(oldId)) {
+                online.addScoreboardTag(role.getId());
+                remember(online, role);
+            }
+        }
     }
 
     /** 役職の保存後、オンラインの保持者の効果を新しい内容に更新する（アイテムは配り直さない） */
@@ -108,24 +147,61 @@ public final class RoleApplier implements Listener {
         }
     }
 
+    // ─────────────────────────────────────────────
+    // 参加時
+    // ─────────────────────────────────────────────
+
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        RoleManager roles = plugin.getRoleManager();
+        reconcile(player);
 
-        // オフライン中に削除された役職の後始末
-        for (String tag : player.getScoreboardTags().toArray(String[]::new)) {
-            Map<PotionEffectType, Integer> effects = roles.deletedEffects(tag);
-            if (effects != null && player.removeScoreboardTag(tag)) clearEffects(player, effects.keySet());
-        }
-
-        Role role = roles.findRole(player);
+        Role role = plugin.getRoleManager().findRole(player);
         if (role == null) return;
         if (plugin.getPluginConfig().reapplyItemsOnJoin()) {
-            applyItems(player, role);
-            plugin.getSpecManager().rememberInventory(player);
+            plugin.getSpecManager().changeInventory(player, () -> applyItems(player, role));
         }
         applyEffects(player, role);
+    }
+
+    /** オフライン中に起きた役職の名前変更・削除・作り直しに合わせて、タグと効果を直す */
+    private void reconcile(Player player) {
+        RoleManager roles = plugin.getRoleManager();
+        PersistentDataContainer pdc = player.getPersistentDataContainer();
+        String uid = pdc.get(roleUidKey, PersistentDataType.STRING);
+        String recordedId = pdc.get(roleIdKey, PersistentDataType.STRING);
+
+        if (uid == null) {
+            // 識別番号を記録する前に付与された人は、従来どおりタグで判断する
+            for (String tag : player.getScoreboardTags().toArray(String[]::new)) {
+                if (roles.exists(tag)) continue;
+                DeletedRole deleted = roles.deletedRoleById(tag);
+                if (deleted != null && player.removeScoreboardTag(tag)) clearEffects(player, deleted.effects().keySet());
+            }
+            Role legacy = roles.findRole(player);
+            if (legacy != null) remember(player, legacy);
+            return;
+        }
+
+        Role role = roles.findByUid(uid);
+        if (role == null) {
+            // 削除された（同じ role id で作り直されていても、別の役職なので付けない）
+            DeletedRole deleted = roles.deletedRole(uid);
+            if (recordedId != null && player.removeScoreboardTag(recordedId) && deleted != null) {
+                clearEffects(player, deleted.effects().keySet());
+            }
+            forget(player);
+        } else if (!role.getId().equals(recordedId)) {
+            // 名前が変わった。タグが外されていなければ新しい名前に付け替える
+            if (recordedId != null && player.removeScoreboardTag(recordedId)) {
+                player.addScoreboardTag(role.getId());
+                remember(player, role);
+            } else {
+                forget(player);
+            }
+        } else if (!player.getScoreboardTags().contains(role.getId())) {
+            forget(player); // /tag などで外された
+        }
     }
 
     @EventHandler

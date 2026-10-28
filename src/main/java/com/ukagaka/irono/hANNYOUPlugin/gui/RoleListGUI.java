@@ -4,7 +4,6 @@ import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
 import com.ukagaka.irono.hANNYOUPlugin.role.RoleManager;
-import com.ukagaka.irono.hANNYOUPlugin.util.Text;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
@@ -31,7 +30,7 @@ public final class RoleListGUI extends BaseGUI {
             String q = searchQuery.toLowerCase(Locale.ROOT);
             filtered = all.stream()
                     .filter(r -> r.getId().toLowerCase(Locale.ROOT).contains(q)
-                            || Text.strip(r.getDisplayName()).toLowerCase(Locale.ROOT).contains(q))
+                            || r.getPlainName().toLowerCase(Locale.ROOT).contains(q))
                     .toList();
         }
         totalPages = pageCount(filtered.size(), ITEMS_PER_PAGE);
@@ -66,7 +65,7 @@ public final class RoleListGUI extends BaseGUI {
                                 player.closeInventory();
                                 plugin.getTrialManager().start(player, current, () -> new RoleListGUI(plugin, player).open());
                             });
-                            case RIGHT -> copyRole(current);
+                            case RIGHT -> promptCopy(current);
                             case LEFT -> switchTo(RoleEditorGUI.edit(plugin, player, current));
                             default -> {}
                         }
@@ -100,24 +99,45 @@ public final class RoleListGUI extends BaseGUI {
                 e -> { playClickSound(); switchTo(new MainMenuGUI(plugin, player)); });
     }
 
-    private void copyRole(Role original) {
+    /** コピー先の role id を入力してもらう */
+    private void promptCopy(Role original) {
         RoleManager roles = plugin.getRoleManager();
         if (!roles.hasCapacity()) {
             sendMessage("§c役職数の上限(" + roles.maxRoles() + ")に達しています");
             playErrorSound();
             return;
         }
+        transition(() -> TextPrompt.open(plugin, player, "§bコピー先の role id を入力",
+                Items.item(Material.PAPER, "§f新しい role id を入力",
+                        "§7コピー元: " + original.getId(),
+                        "§7半角英数字とアンダースコアのみ使用可能"),
+                input -> copyRole(original, input),
+                this::open));
+    }
 
-        String newId = roles.nextAutoId();
-        roles.save(original.copy(newId, original.getDisplayName() + " (コピー)"));
-        plugin.getAuditLogger().log(player, AuditLogger.Action.ROLE_COPY, newId, "コピー元: " + original.getId());
-
-        sendMessage("§a役職「" + original.getDisplayName() + "」をコピーしました");
-        sendMessage("§7新しいID: " + newId);
-        playSuccessSound();
-
+    private void copyRole(Role original, String newId) {
+        // 入力している間に OP を外された場合に備えて、確定時にも確かめる
+        if (!requireOperator()) return;
+        RoleManager roles = plugin.getRoleManager();
+        if (newId.isEmpty()) {
+            // 何も入力しなければコピーしない
+        } else if (!RoleManager.ID_PATTERN.matcher(newId).matches()) {
+            sendMessage("§crole id は半角英数字とアンダースコアのみ使用できます");
+            playErrorSound();
+        } else if (roles.exists(newId)) {
+            sendMessage("§crole id「" + newId + "」は既に存在します");
+            playErrorSound();
+        } else if (!roles.hasCapacity()) {
+            sendMessage("§c役職数の上限(" + roles.maxRoles() + ")に達しています");
+            playErrorSound();
+        } else {
+            roles.save(original.copy(newId, original.getDisplayName() + " (コピー)"));
+            plugin.getAuditLogger().log(player, AuditLogger.Action.ROLE_COPY, newId, "コピー元: " + original.getId());
+            sendMessage("§a役職「" + original.getDisplayName() + "§a」を role id「" + newId + "」にコピーしました");
+            playSuccessSound();
+        }
         reload();
-        refresh();
+        open();
     }
 
     private void openSearch() {

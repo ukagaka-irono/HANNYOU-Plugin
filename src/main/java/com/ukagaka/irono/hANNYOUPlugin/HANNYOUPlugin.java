@@ -9,7 +9,6 @@ import com.ukagaka.irono.hANNYOUPlugin.role.TrialManager;
 import com.ukagaka.irono.hANNYOUPlugin.spec.SpecManager;
 import com.ukagaka.irono.hANNYOUPlugin.spec.SpecRestrictions;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
-import com.ukagaka.irono.hANNYOUPlugin.transfer.RoleTransfer;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -21,7 +20,6 @@ public final class HANNYOUPlugin extends JavaPlugin {
     private RoleManager roleManager;
     private RoleApplier roleApplier;
     private TrialManager trialManager;
-    private RoleTransfer roleTransfer;
     private AuditLogger auditLogger;
     private GuiListener guiListener;
     private SpecManager specManager;
@@ -36,7 +34,6 @@ public final class HANNYOUPlugin extends JavaPlugin {
         roleManager.load(storage.load(), getLogger());
 
         auditLogger = new AuditLogger(this);
-        roleTransfer = new RoleTransfer(this);
         roleApplier = new RoleApplier(this);
         trialManager = new TrialManager(this);
         guiListener = new GuiListener();
@@ -73,7 +70,6 @@ public final class HANNYOUPlugin extends JavaPlugin {
     public RoleManager getRoleManager() { return roleManager; }
     public RoleApplier getRoleApplier() { return roleApplier; }
     public TrialManager getTrialManager() { return trialManager; }
-    public RoleTransfer getRoleTransfer() { return roleTransfer; }
     public AuditLogger getAuditLogger() { return auditLogger; }
     public GuiListener getGuiListener() { return guiListener; }
     public SpecManager getSpecManager() { return specManager; }

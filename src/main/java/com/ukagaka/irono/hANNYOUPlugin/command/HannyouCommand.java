@@ -4,19 +4,23 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import com.ukagaka.irono.hANNYOUPlugin.Permissions;
-import com.ukagaka.irono.hANNYOUPlugin.util.Text;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import org.bukkit.command.CommandSender;
+
+import static com.ukagaka.irono.hANNYOUPlugin.command.CommandSupport.helpLine;
+import static com.ukagaka.irono.hANNYOUPlugin.command.CommandSupport.send;
 
 /** /hannyou ルートコマンド。各機能はサブコマンドとしてぶら下げる */
 public final class HannyouCommand {
     private final HANNYOUPlugin plugin;
     private final KnightsCommand knights;
+    private final SpecCommand spec;
 
     public HannyouCommand(HANNYOUPlugin plugin) {
         this.plugin = plugin;
         this.knights = new KnightsCommand(plugin);
+        this.spec = new SpecCommand(plugin);
     }
 
     public LiteralCommandNode<CommandSourceStack> build() {
@@ -24,23 +28,25 @@ public final class HannyouCommand {
                 .requires(src -> Permissions.isOperator(src.getSender()))
                 .executes(ctx -> help(ctx.getSource().getSender()))
                 .then(knights.node())
+                .then(spec.specNode())
+                .then(spec.unspecNode())
                 .then(Commands.literal("reload")
                         .executes(ctx -> reload(ctx.getSource().getSender())))
                 .build();
     }
 
     private int help(CommandSender sender) {
-        sender.sendMessage(Text.of("§6=== HANNYOU Plugin ==="));
-        sender.sendMessage(Text.suggestButton("§e/hannyou knights §7- 役職管理 (Knights Editor)",
-                "/hannyou knights ", "§7クリックで入力欄に入れる"));
-        sender.sendMessage(Text.suggestButton("§e/hannyou reload §7- config.yml を再読み込み",
-                "/hannyou reload", "§7クリックで入力欄に入れる"));
+        send(sender, "§6=== HANNYOU Plugin ===");
+        helpLine(sender, "/hannyou knights", "", "役職の一覧・作成・付与・削除");
+        helpLine(sender, "/hannyou spec", " [対象]", "見えない・ぶつからない・操作できないクリエイティブにする（省略時は自分）");
+        helpLine(sender, "/hannyou unspec", " [対象]", "スペクモードを解除する（省略時は自分）");
+        helpLine(sender, "/hannyou reload", "", "config.yml を再読み込みする");
         return Command.SINGLE_SUCCESS;
     }
 
     private int reload(CommandSender sender) {
         plugin.reloadPluginConfig();
-        sender.sendMessage(Text.of("§aconfig.yml を再読み込みしました"));
+        send(sender, "§aconfig.yml を再読み込みしました");
         return Command.SINGLE_SUCCESS;
     }
 }

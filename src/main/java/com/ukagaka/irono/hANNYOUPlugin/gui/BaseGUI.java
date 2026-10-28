@@ -61,7 +61,7 @@ public abstract class BaseGUI implements InventoryHolder {
     }
 
     /** OP でなくなった場合は案内を出して false を返す */
-    private boolean allowed() {
+    protected boolean requireOperator() {
         if (Permissions.isOperator(player)) return true;
         sendMessage("§cこの操作は OP だけが使えます");
         playErrorSound();
@@ -78,7 +78,7 @@ public abstract class BaseGUI implements InventoryHolder {
     // ─────────────────────────────────────────────
 
     public void open() {
-        if (!allowed()) {
+        if (!requireOperator()) {
             player.closeInventory();
             return;
         }
@@ -197,7 +197,7 @@ public abstract class BaseGUI implements InventoryHolder {
     final void dispatchClick(InventoryClickEvent event) {
         if (transitioning) {
             event.setCancelled(true);
-        } else if (!allowed()) {
+        } else if (!requireOperator()) {
             event.setCancelled(true);
             closeLater();
         } else {

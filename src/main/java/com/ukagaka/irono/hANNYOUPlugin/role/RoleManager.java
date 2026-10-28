@@ -3,7 +3,6 @@ package com.ukagaka.irono.hANNYOUPlugin.role;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.potion.PotionEffectType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,10 +24,12 @@ public final class RoleManager {
     public static final Pattern ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     private final Map<String, Role> roles = new ConcurrentHashMap<>();
-    /** 削除済み役職ID → その役職の効果（オフラインだった保持者の後始末用） */
-    private final Map<String, Map<PotionEffectType, Integer>> deleted = new ConcurrentHashMap<>();
+    /** 削除済み役職の識別番号 → 記録（オフラインだった保持者の後始末用） */
+    private final Map<String, DeletedRole> deleted = new ConcurrentHashMap<>();
     private final RoleStorage storage;
     private final IntSupplier maxRoles;
+    /** role id 順に並べた一覧（役職が変わるまで使い回す。変わったら null にする） */
+    private volatile List<Role> sortedCache;
 
     public RoleManager(RoleStorage storage, IntSupplier maxRoles) {
         this.storage = storage;
@@ -38,13 +39,16 @@ public final class RoleManager {
     public void load(RoleStorage.LoadResult result, Logger logger) {
         roles.clear();
         roles.putAll(result.roles());
+        sortedCache = null;
         deleted.clear();
-        result.deletedRoles().forEach((id, effects) -> deleted.put(id, Map.copyOf(effects)));
+        deleted.putAll(result.deletedRoles());
         logger.info(roles.size() + "件の役職を読み込みました");
+        if (result.needsSave()) persist(); // 識別番号を新しく割り振ったら、すぐ書き出して固定する
     }
 
     /** 現在の内容を knights-role.yml に書き出す */
     private void persist() {
+        sortedCache = null;
         storage.save(roles.values(), deleted);
     }
 
@@ -69,7 +73,12 @@ public final class RoleManager {
     }
 
     public List<Role> sorted() {
-        return roles.values().stream().sorted(Comparator.comparing(Role::getId)).toList();
+        List<Role> cached = sortedCache;
+        if (cached == null) {
+            cached = roles.values().stream().sorted(Comparator.comparing(Role::getId)).toList();
+            sortedCache = cached;
+        }
+        return cached;
     }
 
     /** 新しい役職を追加できるか（max-roles の上限チェック） */
@@ -84,7 +93,7 @@ public final class RoleManager {
 
     public void save(Role role) {
         roles.put(role.getId(), role);
-        deleted.remove(role.getId());
+        deleted.remove(role.getUid());
         persist();
     }
 
@@ -92,34 +101,38 @@ public final class RoleManager {
     public Role delete(String id) {
         Role removed = roles.remove(id);
         if (removed != null) {
-            deleted.put(id, Map.copyOf(removed.getEffects()));
+            deleted.put(removed.getUid(), new DeletedRole(id, Map.copyOf(removed.getEffects())));
             persist();
         }
         return removed;
     }
 
-    /** IDを変更して保存する。オンラインプレイヤーの役職タグも付け替える（旧IDは削除済み扱いにしない） */
+    /** role id を変更して保存する（プレイヤーのタグの付け替えは RoleApplier#renameRole） */
     public void rename(String oldId, Role role) {
         roles.remove(oldId);
         save(role);
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            if (online.removeScoreboardTag(oldId)) {
-                online.addScoreboardTag(role.getId());
-            }
-        }
     }
 
-    /** 削除済み役職の効果（削除済みでなければnull） */
-    public Map<PotionEffectType, Integer> deletedEffects(String id) {
-        return deleted.get(id);
+    /** 識別番号から役職を探す（名前が変わっていても見つかる） */
+    public Role findByUid(String uid) {
+        if (uid == null) return null;
+        for (Role role : roles.values()) {
+            if (role.getUid().equals(uid)) return role;
+        }
+        return null;
     }
 
-    /** 000001 形式で未使用の最小番号IDを作る */
-    public String nextAutoId() {
-        for (int n = 1; ; n++) {
-            String candidate = String.format("%06d", n);
-            if (!roles.containsKey(candidate)) return candidate;
+    /** 削除済み役職の記録（削除済みでなければnull） */
+    public DeletedRole deletedRole(String uid) {
+        return uid == null ? null : deleted.get(uid);
+    }
+
+    /** 識別番号を記録する前に付与されたプレイヤー用。role id から削除済み役職の記録を探す */
+    public DeletedRole deletedRoleById(String id) {
+        for (DeletedRole role : deleted.values()) {
+            if (role.id().equals(id)) return role;
         }
+        return null;
     }
 
     /** プレイヤーに付与されている役職（スコアボードタグ）を探す */

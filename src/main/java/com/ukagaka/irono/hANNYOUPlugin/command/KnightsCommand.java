@@ -3,36 +3,42 @@ package com.ukagaka.irono.hANNYOUPlugin.command;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
+import com.ukagaka.irono.hANNYOUPlugin.Permissions;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
 import com.ukagaka.irono.hANNYOUPlugin.gui.ConfirmDeleteGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.RoleEditorGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.RoleListGUI;
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
-import com.ukagaka.irono.hANNYOUPlugin.transfer.RoleTransfer;
 import com.ukagaka.irono.hANNYOUPlugin.util.Text;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+import static com.ukagaka.irono.hANNYOUPlugin.command.CommandSupport.NO_PLAYERS;
+import static com.ukagaka.irono.hANNYOUPlugin.command.CommandSupport.helpLine;
+import static com.ukagaka.irono.hANNYOUPlugin.command.CommandSupport.requirePlayer;
+import static com.ukagaka.irono.hANNYOUPlugin.command.CommandSupport.send;
+
 /**
- * /hannyou knights サブコマンド（Brigadier）。
+ * /hannyou knights サブコマンド（Brigadier）。役職の一覧・作成・編集・付与・削除。
  * 引数の型・補完・セレクター解決はサーバー側で処理されるため、手書きのパースや補完処理が不要。
  */
 public final class KnightsCommand {
@@ -53,64 +59,22 @@ public final class KnightsCommand {
                     .forEach(builder::suggest);
             return builder.buildFuture();
         };
-        SuggestionProvider<CommandSourceStack> exportTargets = (ctx, builder) -> {
-            if ("all".startsWith(builder.getRemainingLowerCase())) builder.suggest("all");
-            return roleIds.getSuggestions(ctx, builder);
-        };
-        SuggestionProvider<CommandSourceStack> importFiles = (ctx, builder) -> {
-            String input = builder.getRemainingLowerCase();
-            for (File file : plugin.getRoleTransfer().listImportableFiles()) {
-                if (file.getName().toLowerCase(Locale.ROOT).startsWith(input)) {
-                    builder.suggest(StringArgumentType.escapeIfRequired(file.getName()));
-                }
-            }
-            return builder.buildFuture();
-        };
 
         return Commands.literal("knights")
                 .executes(ctx -> help(ctx.getSource().getSender()))
-                .then(Commands.literal("itiran")
-                        .executes(ctx -> openRoleList(ctx.getSource().getSender())))
                 .then(Commands.literal("list")
                         .executes(ctx -> list(ctx.getSource().getSender()))
                         .then(roleArg(roleIds, this::details)))
                 .then(Commands.literal("editor")
                         .executes(ctx -> createRole(ctx.getSource().getSender()))
                         .then(roleArg(roleIds, this::editRole)))
-                .then(Commands.literal("try")
-                        .then(roleArg(roleIds, this::tryOn)))
-                .then(Commands.literal("untry")
-                        .executes(ctx -> untry(ctx.getSource().getSender())))
-                .then(Commands.literal("role")
+                .then(Commands.literal("give")
                         .then(Commands.argument("targets", ArgumentTypes.players())
                                 .then(Commands.argument("role_id", StringArgumentType.word())
                                         .suggests(roleIds)
-                                        .executes(this::applyRole))))
-                .then(Commands.literal("spec")
-                        .executes(ctx -> specSelf(ctx.getSource().getSender(), true))
-                        .then(Commands.argument("targets", ArgumentTypes.players())
-                                .executes(ctx -> spec(ctx, true))))
-                .then(Commands.literal("unspec")
-                        .executes(ctx -> specSelf(ctx.getSource().getSender(), false))
-                        .then(Commands.argument("targets", ArgumentTypes.players())
-                                .executes(ctx -> spec(ctx, false))))
-                .then(Commands.literal("roleremove")
-                        .then(roleArg(roleIds, this::openConfirmDelete)))
-                .then(Commands.literal("export")
-                        .executes(ctx -> export(ctx.getSource().getSender(), "all"))
-                        .then(Commands.argument("target", StringArgumentType.word())
-                                .suggests(exportTargets)
-                                .executes(ctx -> export(ctx.getSource().getSender(),
-                                        StringArgumentType.getString(ctx, "target")))))
-                .then(Commands.literal("import")
-                        .executes(ctx -> listImportable(ctx.getSource().getSender()))
-                        .then(Commands.argument("file", StringArgumentType.string())
-                                .suggests(importFiles)
-                                .executes(ctx -> importFile(ctx.getSource().getSender(),
-                                        StringArgumentType.getString(ctx, "file"), false))
-                                .then(Commands.literal("overwrite")
-                                        .executes(ctx -> importFile(ctx.getSource().getSender(),
-                                                StringArgumentType.getString(ctx, "file"), true)))));
+                                        .executes(this::give))))
+                .then(Commands.literal("remove")
+                        .then(roleArg(roleIds, this::openConfirmDelete)));
     }
 
     @FunctionalInterface
@@ -118,49 +82,90 @@ public final class KnightsCommand {
         int run(CommandSender sender, Role role);
     }
 
-    /** 役職IDを1つ受け取る引数。存在しないIDならエラーを返す */
-    private com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> roleArg(
+    /** role id を1つ受け取る引数。存在しない role id ならエラーを返す */
+    private RequiredArgumentBuilder<CommandSourceStack, String> roleArg(
             SuggestionProvider<CommandSourceStack> suggestions, RoleAction action) {
         return Commands.argument("role_id", StringArgumentType.word())
                 .suggests(suggestions)
                 .executes(ctx -> {
                     CommandSender sender = ctx.getSource().getSender();
-                    String roleId = StringArgumentType.getString(ctx, "role_id");
-                    Role role = plugin.getRoleManager().get(roleId);
-                    if (role == null) {
-                        send(sender, "§cRole not found: " + roleId);
-                        return 0;
-                    }
-                    return action.run(sender, role);
+                    Role role = findRole(sender, StringArgumentType.getString(ctx, "role_id"));
+                    return role == null ? 0 : action.run(sender, role);
                 });
     }
 
-    private static void send(CommandSender sender, String legacy) {
-        sender.sendMessage(Text.of(legacy));
-    }
-
-    private static Player requirePlayer(CommandSender sender) {
-        if (sender instanceof Player player) return player;
-        send(sender, "This command can only be used by players!");
-        return null;
-    }
-
-    private static String quote(String argument) {
-        return StringArgumentType.escapeIfRequired(argument);
+    private Role findRole(CommandSender sender, String roleId) {
+        Role role = plugin.getRoleManager().get(roleId);
+        if (role == null) send(sender, "§c役職が見つかりません: " + roleId);
+        return role;
     }
 
     // ─────────────────────────────────────────────
-    // GUIを開くコマンド
+    // list
     // ─────────────────────────────────────────────
 
-    private int openRoleList(CommandSender sender) {
-        Player player = requirePlayer(sender);
-        if (player == null) return 0;
-        new RoleListGUI(plugin, player).open();
+    /** プレイヤーには役職一覧のGUIを開き、コンソールにはチャットで一覧を出す */
+    private int list(CommandSender sender) {
+        if (sender instanceof Player player) {
+            new RoleListGUI(plugin, player).open();
+            return Command.SINGLE_SUCCESS;
+        }
+        List<Role> roles = plugin.getRoleManager().sorted();
+        if (roles.isEmpty()) {
+            send(sender, "§e登録されている役職はありません");
+            return 0;
+        }
+        send(sender, "§6=== 役職一覧 (" + roles.size() + "件) ===");
+        for (Role role : roles) send(sender, "§a" + role.getDisplayName() + " §7(" + role.getId() + ")");
+        return roles.size();
+    }
+
+    /** 役職の中身と、編集・試着・削除のボタン */
+    private int details(CommandSender sender, Role role) {
+        send(sender, "§6=== 役職情報: " + role.getDisplayName() + "§6 ===");
+        send(sender, "§7role id: §f" + role.getId());
+
+        Component equipment = Text.of("§7装備: ");
+        String[] labels = {"頭", "胴", "脚", "足", "オフハンド"};
+        Role.EquipmentSlot[] slots = Role.EquipmentSlot.values();
+        for (int i = 0; i < slots.length; i++) {
+            ItemStack item = role.getEquipment(slots[i]);
+            equipment = equipment.append(Text.of((i == 0 ? "" : " §8/ ") + "§7" + labels[i] + " "))
+                    .append(item == null ? Text.of("§8なし") : item.displayName());
+        }
+        sender.sendMessage(equipment);
+
+        long inv = Arrays.stream(role.getInventory()).filter(Objects::nonNull).count();
+        long bar = Arrays.stream(role.getHotbar()).filter(Objects::nonNull).count();
+        send(sender, "§7インベントリ: §f" + inv + "枠 §7/ ホットバー: §f" + bar + "枠");
+
+        List<String> effects = new ArrayList<>();
+        role.getEffects().forEach((type, level) ->
+                effects.add(RoleEditorGUI.effectName(type) + " " + "I".repeat(level)));
+        send(sender, "§7効果: §f" + (effects.isEmpty() ? "なし" : String.join(", ", effects)));
+
+        String id = role.getId();
+        sender.sendMessage(Text.runButton("§e【編集】", BASE + " editor " + id, "§7エディタを開く")
+                .append(Text.of(" "))
+                .append(Text.callbackButton("§d【試着】", "§7自分に一時的に適用する",
+                        ClickCallback.UNLIMITED_USES, player -> tryOn(player, id)))
+                .append(Text.of(" "))
+                .append(Text.runButton("§c【削除】", BASE + " remove " + id, "§7削除の確認画面を開く")));
         return Command.SINGLE_SUCCESS;
     }
 
-    /** 役職IDを省略すると新規作成、指定するとその役職を編集する */
+    /** 詳細の【試着】ボタン。押した時点の役職を試着する（OP でなくなっていたら何もしない） */
+    private void tryOn(Player player, String roleId) {
+        if (!Permissions.isOperator(player)) return;
+        Role role = findRole(player, roleId);
+        if (role != null) plugin.getTrialManager().start(player, role, null);
+    }
+
+    // ─────────────────────────────────────────────
+    // editor / remove
+    // ─────────────────────────────────────────────
+
+    /** role id を省略すると新規作成、指定するとその役職を編集する */
     private int createRole(CommandSender sender) {
         Player player = requirePlayer(sender);
         if (player == null) return 0;
@@ -183,97 +188,19 @@ public final class KnightsCommand {
     }
 
     // ─────────────────────────────────────────────
-    // 試着
+    // give
     // ─────────────────────────────────────────────
 
-    private int tryOn(CommandSender sender, Role role) {
-        Player player = requirePlayer(sender);
-        if (player == null) return 0;
-        plugin.getTrialManager().start(player, role, null);
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private int untry(CommandSender sender) {
-        Player player = requirePlayer(sender);
-        if (player == null) return 0;
-        if (!plugin.getTrialManager().end(player, true)) {
-            send(sender, "§e試着中ではありません");
-            return 0;
-        }
-        return Command.SINGLE_SUCCESS;
-    }
-
-    // ─────────────────────────────────────────────
-    // list
-    // ─────────────────────────────────────────────
-
-    private int list(CommandSender sender) {
-        List<Role> roles = plugin.getRoleManager().sorted();
-        if (roles.isEmpty()) {
-            send(sender, "§e登録されている役職はありません");
-            return 0;
-        }
-        send(sender, "§6=== 役職一覧 (" + roles.size() + "件) ===");
-        for (Role role : roles) {
-            sender.sendMessage(Text.runButton(
-                    "§a" + role.getDisplayName() + " §7(" + role.getId() + ")",
-                    BASE + " list " + role.getId(), "§7クリックで詳細を表示"));
-        }
-        return roles.size();
-    }
-
-    /** 役職の中身と、編集・試着・削除のボタン */
-    private int details(CommandSender sender, Role role) {
-        send(sender, "§6=== 役職情報: " + role.getDisplayName() + "§6 ===");
-        send(sender, "§7ID: §f" + role.getId());
-
-        Component equipment = Text.of("§7装備: ");
-        String[] labels = {"頭", "胴", "脚", "足", "オフハンド"};
-        Role.EquipmentSlot[] slots = Role.EquipmentSlot.values();
-        for (int i = 0; i < slots.length; i++) {
-            ItemStack item = role.getEquipment(slots[i]);
-            equipment = equipment.append(Text.of((i == 0 ? "" : " §8/ ") + "§7" + labels[i] + " "))
-                    .append(item == null ? Text.of("§8なし") : item.displayName());
-        }
-        sender.sendMessage(equipment);
-
-        long inv = Arrays.stream(role.getInventory()).filter(Objects::nonNull).count();
-        long bar = Arrays.stream(role.getHotbar()).filter(Objects::nonNull).count();
-        send(sender, "§7インベントリ: §f" + inv + "枠 §7/ ホットバー: §f" + bar + "枠");
-
-        List<String> effects = new ArrayList<>();
-        role.getEffects().forEach((type, level) -> {
-            String key = type.getKey().getKey();
-            effects.add(key.substring(0, 1).toUpperCase() + key.substring(1) + " " + "I".repeat(level));
-        });
-        send(sender, "§7効果: §f" + (effects.isEmpty() ? "なし" : String.join(", ", effects)));
-
-        String id = role.getId();
-        sender.sendMessage(Text.runButton("§e【編集】", BASE + " editor " + id, "§7エディタを開く")
-                .append(Text.of(" "))
-                .append(Text.runButton("§d【試着】", BASE + " try " + id, "§7自分に一時的に適用する"))
-                .append(Text.of(" "))
-                .append(Text.runButton("§c【削除】", BASE + " roleremove " + id, "§7削除の確認画面を開く")));
-        return Command.SINGLE_SUCCESS;
-    }
-
-    // ─────────────────────────────────────────────
-    // role
-    // ─────────────────────────────────────────────
-
-    private int applyRole(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+    private int give(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         CommandSender sender = ctx.getSource().getSender();
         String roleId = StringArgumentType.getString(ctx, "role_id");
-        Role role = plugin.getRoleManager().get(roleId);
-        if (role == null) {
-            send(sender, "§cRole not found: " + roleId);
-            return 0;
-        }
+        Role role = findRole(sender, roleId);
+        if (role == null) return 0;
 
         List<Player> targets = ctx.getArgument("targets", PlayerSelectorArgumentResolver.class)
                 .resolve(ctx.getSource());
         if (targets.isEmpty()) {
-            send(sender, "§eNo matching players found.");
+            send(sender, NO_PLAYERS);
             return 0;
         }
 
@@ -283,48 +210,8 @@ public final class KnightsCommand {
 
         plugin.getAuditLogger().log(sender, AuditLogger.Action.ROLE_APPLY, roleId,
                 "対象: " + targets.size() + "人 / ターゲット指定: " + rawArgument(ctx, "targets"));
-        send(sender, "§aApplied role '" + role.getDisplayName() + "§a' to " + targets.size() + " player(s).");
+        send(sender, "§a役職「" + role.getDisplayName() + "§a」を " + targets.size() + "人に付与しました");
         return targets.size();
-    }
-
-    // ─────────────────────────────────────────────
-    // spec / unspec
-    // ─────────────────────────────────────────────
-
-    private int spec(CommandContext<CommandSourceStack> ctx, boolean enable) throws CommandSyntaxException {
-        CommandSender sender = ctx.getSource().getSender();
-        List<Player> targets = ctx.getArgument("targets", PlayerSelectorArgumentResolver.class)
-                .resolve(ctx.getSource());
-        if (targets.isEmpty()) {
-            send(sender, "§eNo matching players found.");
-            return 0;
-        }
-        return spec(sender, targets, enable);
-    }
-
-    /** 対象を省略したときは自分自身 */
-    private int specSelf(CommandSender sender, boolean enable) {
-        Player player = requirePlayer(sender);
-        if (player == null) return 0;
-        if (enable ? plugin.getSpecManager().isSpec(player) : !plugin.getSpecManager().isSpec(player)) {
-            send(sender, enable ? "§eすでにスペク中です" : "§eスペク中ではありません");
-            return 0;
-        }
-        return spec(sender, List.of(player), enable);
-    }
-
-    private int spec(CommandSender sender, List<Player> targets, boolean enable) {
-        int changed = 0;
-        for (Player target : targets) {
-            boolean done = enable
-                    ? plugin.getSpecManager().enable(target)
-                    : plugin.getSpecManager().disable(target);
-            if (done) changed++;
-        }
-        int unchanged = targets.size() - changed;
-        send(sender, (enable ? "§a" + changed + "人をスペクモードにしました" : "§a" + changed + "人のスペクモードを解除しました")
-                + (unchanged > 0 ? "§7（" + unchanged + "人は" + (enable ? "すでにスペク中" : "スペク中ではありません") + "）" : ""));
-        return changed;
     }
 
     private static String rawArgument(CommandContext<CommandSourceStack> ctx, String name) {
@@ -335,109 +222,19 @@ public final class KnightsCommand {
     }
 
     // ─────────────────────────────────────────────
-    // export / import
-    // ─────────────────────────────────────────────
-
-    private int export(CommandSender sender, String target) {
-        if (target.equalsIgnoreCase("all")) {
-            plugin.getRoleTransfer().exportAll(List.copyOf(plugin.getRoleManager().all())).thenAccept(fileName -> {
-                if (fileName != null) {
-                    send(sender, "§a全役職をエクスポートしました: exports/" + fileName);
-                    plugin.getAuditLogger().log(sender, AuditLogger.Action.ROLE_EXPORT, "ALL", "file: " + fileName);
-                } else {
-                    send(sender, "§cエクスポートに失敗しました。コンソールを確認してください。");
-                }
-            });
-            return Command.SINGLE_SUCCESS;
-        }
-
-        Role role = plugin.getRoleManager().get(target);
-        if (role == null) {
-            send(sender, "§cRole not found: " + target);
-            return 0;
-        }
-        plugin.getRoleTransfer().exportRole(role).thenAccept(fileName -> {
-            if (fileName != null) {
-                send(sender, "§a役職をエクスポートしました: exports/" + fileName);
-                plugin.getAuditLogger().log(sender, AuditLogger.Action.ROLE_EXPORT, target, "file: " + fileName);
-            } else {
-                send(sender, "§cエクスポートに失敗しました。");
-            }
-        });
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private int listImportable(CommandSender sender) {
-        List<File> files = plugin.getRoleTransfer().listImportableFiles();
-        if (files.isEmpty()) {
-            send(sender, "§eインポート可能なファイルがありません。");
-            send(sender, "§7exports/ フォルダにYMLファイルを配置してください。");
-            return 0;
-        }
-        send(sender, "§6=== インポート可能なファイル ===");
-        for (File file : files) {
-            sender.sendMessage(Text.suggestButton("§e  " + file.getName(),
-                    BASE + " import " + quote(file.getName()), "§7クリックで入力欄に入れる"));
-        }
-        send(sender, "§7使用: " + BASE + " import <filename> [overwrite]");
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private int importFile(CommandSender sender, String fileName, boolean overwrite) {
-        RoleTransfer transfer = plugin.getRoleTransfer();
-        File file = transfer.resolve(fileName);
-        if (file == null) {
-            send(sender, "§cファイルが見つかりません: " + fileName);
-            return 0;
-        }
-
-        transfer.load(file).thenAccept(imported -> {
-            if (imported.isEmpty()) {
-                send(sender, "§cインポートに失敗しました。ファイルを確認してください。");
-                return;
-            }
-            RoleTransfer.ImportResult result = transfer.register(imported, overwrite, sender, fileName);
-            send(sender, "§aインポート完了: " + result.added() + "件追加, " + result.skipped() + "件スキップ");
-            if (result.invalid() > 0) send(sender, "§cIDが不正なため " + result.invalid() + "件を読み込みませんでした（半角英数字とアンダースコアのみ使えます）");
-            if (result.limited() > 0) {
-                send(sender, "§c役職数の上限(" + plugin.getRoleManager().maxRoles() + ")に達したため "
-                        + result.limited() + "件を追加できませんでした");
-            }
-            if (result.skipped() > 0) {
-                send(sender, "§7※スキップされた役職を上書きするには overwrite オプションを使用してください");
-                sender.sendMessage(Text.runButton("§b§l【上書きでインポート】",
-                        BASE + " import " + quote(fileName) + " overwrite", "§7既存の役職を上書きして読み込み直す"));
-            }
-        });
-        return Command.SINGLE_SUCCESS;
-    }
-
-    // ─────────────────────────────────────────────
     // help
     // ─────────────────────────────────────────────
 
     private static final String[][] HELP = {
-            {"itiran", "", "役職一覧をGUIで開く"},
-            {"list", " [role_id]", "役職の一覧（IDを指定すると詳細）"},
-            {"role", " <player|@selector> <role_id>", "Apply role (@a, @s, @p, @r 対応)"},
-            {"try", " <role_id>", "役職を試着"},
-            {"untry", "", "試着を終了"},
-            {"editor", " [role_id]", "役職を新規作成（IDを指定すると編集）"},
-            {"spec", " [player|@selector]", "見えない・ぶつからない・操作できないクリエイティブにする"},
-            {"unspec", " [player|@selector]", "スペクモードを解除"},
-            {"roleremove", " <role_id>", "削除の確認画面を開く"},
-            {"export", " [role_id|all]", "Export role(s) to YAML"},
-            {"import", " [filename] [overwrite]", "Import role(s) from YAML"},
+            {"list", " [role id]", "役職一覧の GUI を開く（role id を指定するとチャットに詳細）"},
+            {"editor", " [role id]", "役職を新規作成する（role id を指定すると編集）"},
+            {"give", " <対象> <role id>", "役職を付与する（@a などのセレクターも使える）"},
+            {"remove", " <role id>", "役職を削除する（確認画面が開く）"},
     };
 
     private int help(CommandSender sender) {
-        send(sender, "§6=== Knights Editor Commands ===");
-        for (String[] line : HELP) {
-            sender.sendMessage(Text.suggestButton(
-                    "§e" + BASE + " " + line[0] + line[1] + " §7- " + line[2],
-                    BASE + " " + line[0] + (line[1].isEmpty() ? "" : " "),
-                    "§7クリックで入力欄に入れる"));
-        }
+        send(sender, "§6=== 役職（/hannyou knights） ===");
+        for (String[] line : HELP) helpLine(sender, BASE + " " + line[0], line[1], line[2]);
         return Command.SINGLE_SUCCESS;
     }
 }

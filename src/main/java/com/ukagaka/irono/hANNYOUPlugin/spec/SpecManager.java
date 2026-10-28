@@ -16,6 +16,7 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -43,6 +44,7 @@ import java.util.UUID;
  * 体は透明化の効果、装備と手持ちは見る側にだけ空気を送ることで隠し、名前はチーム設定で隠す。
  * スペク中の人同士はチームの「味方の透明を見る」設定で半透明に見える。
  * 状態はプレイヤーデータ(PDC)に保存するので、ログアウトや再起動をまたいで続く。
+ * 判定は頻繁に呼ばれる（振動・狙い・ダメージなどのイベントごと）ため、オンラインのスペク中の人はメモリでも持つ。
  * クリエイティブのアイテムを持ち帰れないよう、開始時の持ち物を保存しておき、解除時に戻す。
  */
 public final class SpecManager implements Listener {
@@ -64,6 +66,8 @@ public final class SpecManager implements Listener {
     /** スペク開始時の持ち物（解除時に戻す） */
     private final NamespacedKey itemsKey;
     private final Set<UUID> pendingMask = new HashSet<>();
+    /** オンラインでスペク中の人（PDC の内容をメモリに写したもの） */
+    private final Set<UUID> online = new HashSet<>();
     private BukkitTask task;
 
     public SpecManager(HANNYOUPlugin plugin) {
@@ -75,14 +79,18 @@ public final class SpecManager implements Listener {
 
     /** 毎秒、装備の隠し直し（取りこぼし対策）とアクションバー表示を行う。オンラインのスペク中の人に状態を再適用する */
     public void start() {
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            if (isSpec(online)) applyState(online);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (hasSpecData(player)) {
+                online.add(player.getUniqueId());
+                applyState(player);
+            }
         }
         task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                if (!isSpec(online)) continue;
-                hideEquipment(online);
-                online.sendActionBar(Text.of("§7[スペク中] ほかのプレイヤーからは見えません"));
+            for (UUID id : online) {
+                Player player = Bukkit.getPlayer(id);
+                if (player == null) continue;
+                hideEquipment(player);
+                player.sendActionBar(Text.of("§7[スペク中] ほかのプレイヤーからは見えません"));
             }
         }, 20L, 20L);
     }
@@ -92,6 +100,10 @@ public final class SpecManager implements Listener {
     }
 
     public boolean isSpec(Player player) {
+        return online.contains(player.getUniqueId());
+    }
+
+    private boolean hasSpecData(Player player) {
         return player.getPersistentDataContainer().has(gameModeKey, PersistentDataType.STRING);
     }
 
@@ -104,6 +116,7 @@ public final class SpecManager implements Listener {
         Team current = scoreboard().getEntryTeam(player.getName());
         pdc.set(teamKey, PersistentDataType.STRING,
                 current == null || current.getName().equals(TEAM_NAME) ? "" : current.getName());
+        online.add(player.getUniqueId());
         rememberInventory(player);
         player.saveData(); // サーバーが落ちても保存した持ち物が残るよう即保存
 
@@ -122,6 +135,7 @@ public final class SpecManager implements Listener {
         pdc.remove(gameModeKey); // 先に外して、ゲームモード変更の禁止に引っかからないようにする
         pdc.remove(teamKey);
         pdc.remove(itemsKey);
+        online.remove(player.getUniqueId());
 
         player.setGameMode(parseGameMode(gameMode));
         if (items != null) restoreInventory(player, items);
@@ -149,11 +163,23 @@ public final class SpecManager implements Listener {
     }
 
     /**
-     * 今の持ち物を、解除時に戻す内容として保存する。
-     * スペク中に役職が配られたときも呼び、配られた持ち物を解除後に残す。
+     * 持ち物を変更する（役職の配布など）。スペク中なら、保存してある持ち物に戻してから変更し、
+     * その結果を解除時に戻す内容として保存し直す。今の持ち物から始めると、役職で上書きされない
+     * 防具やオフハンドの枠に残ったアイテムまで保存してしまうため。
      */
-    public void rememberInventory(Player player) {
-        if (!isSpec(player)) return;
+    public void changeInventory(Player player, Runnable change) {
+        if (!isSpec(player)) {
+            change.run();
+            return;
+        }
+        byte[] items = player.getPersistentDataContainer().get(itemsKey, PersistentDataType.BYTE_ARRAY);
+        if (items != null) restoreInventory(player, items);
+        change.run();
+        rememberInventory(player);
+    }
+
+    /** 今の持ち物を、解除時に戻す内容として保存する */
+    private void rememberInventory(Player player) {
         player.getPersistentDataContainer().set(itemsKey, PersistentDataType.BYTE_ARRAY,
                 ItemStack.serializeItemsAsBytes(Arrays.asList(player.getInventory().getContents())));
     }
@@ -276,9 +302,18 @@ public final class SpecManager implements Listener {
     // 状態の維持
     // ─────────────────────────────────────────────
 
-    @EventHandler
+    /** 役職の配り直しなど、ほかの参加時の処理より先にスペク中かどうかを読み込む */
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onJoin(PlayerJoinEvent event) {
-        if (isSpec(event.getPlayer())) applyState(event.getPlayer());
+        Player player = event.getPlayer();
+        if (!hasSpecData(player)) return;
+        online.add(player.getUniqueId());
+        applyState(player);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        online.remove(event.getPlayer().getUniqueId());
     }
 
     /** スペク中はクリエイティブ以外にできないようにする（解除は unspec で） */
@@ -286,7 +321,7 @@ public final class SpecManager implements Listener {
     public void onGameModeChange(PlayerGameModeChangeEvent event) {
         if (isSpec(event.getPlayer()) && event.getNewGameMode() != GameMode.CREATIVE) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage(Text.of("§cスペク中はゲームモードを変更できません（/hannyou knights unspec で解除）"));
+            event.getPlayer().sendMessage(Text.of("§cスペク中はゲームモードを変更できません（/hannyou unspec で解除）"));
         }
     }
 }

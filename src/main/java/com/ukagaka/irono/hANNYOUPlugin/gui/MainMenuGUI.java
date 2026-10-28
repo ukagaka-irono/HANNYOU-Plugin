@@ -25,11 +25,6 @@ public final class MainMenuGUI extends BaseGUI {
                         "§aクリックで開く"),
                 e -> { playClickSound(); switchTo(new RoleListGUI(plugin, player)); });
 
-        button(14, Items.item(Material.HOPPER, "§b役職をインポート",
-                        "§7exports/ フォルダのYMLから読み込みます",
-                        "§aクリックでファイル選択"),
-                e -> { playClickSound(); switchTo(new ImportFileListGUI(plugin, player)); });
-
         button(49, Items.item(Material.BARRIER, "§cメニューを閉じる"),
                 e -> { playClickSound(); closeLater(); });
 

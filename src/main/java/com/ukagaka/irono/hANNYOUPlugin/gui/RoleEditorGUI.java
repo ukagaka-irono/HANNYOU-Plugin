@@ -31,19 +31,18 @@ import java.util.Set;
 public final class RoleEditorGUI extends BaseGUI {
     private enum Mode { CREATE, EDIT }
 
-    private static final int PAGE_EQUIPMENT = 1;
+    /** 1ページ目: 左に装備、右に role id・アイコン・表示名 */
+    private static final int PAGE_MAIN = 1;
     private static final int PAGE_INVENTORY = 2;
     private static final int PAGE_EFFECTS = 3;
-    private static final int PAGE_SYSTEM = 4;
 
     private static final int SLOT_FROM_HAND = 47;
-    private static final int SLOT_EXPORT = 48;
     private static final int SLOT_TRY = 51;
     private static final int SLOT_CLOSE = 49;
     private static final int SLOT_SAVE = 50;
-    private static final int SLOT_SYSTEM_ID = 13;
-    private static final int SLOT_ICON = 22;
-    private static final int SLOT_NAME = 31;
+    private static final int SLOT_ROLE_ID = 15;
+    private static final int SLOT_ICON = 24;
+    private static final int SLOT_NAME = 33;
     private static final int[] BOTTOM_GLASS = {46, 47, 48, 51, 52};
 
     private static final Map<Role.EquipmentSlot, Integer> EQUIPMENT_SLOTS = new EnumMap<>(Map.of(
@@ -66,12 +65,13 @@ public final class RoleEditorGUI extends BaseGUI {
             PotionEffectType.HUNGER, PotionEffectType.WEAKNESS, PotionEffectType.POISON,
             PotionEffectType.WITHER, PotionEffectType.LEVITATION, PotionEffectType.UNLUCK,
             PotionEffectType.BAD_OMEN, PotionEffectType.DARKNESS);
+    /** 上3段にバフ19種、下2段にデバフ13種を中央寄せで並べる（EFFECTS と同じ順） */
     private static final int[] EFFECT_SLOTS = {
+            1, 2, 3, 4, 5, 6, 7,
             10, 11, 12, 13, 14, 15, 16,
-            19, 20, 21, 22, 23,
-            28, 29, 30, 31, 32, 33, 34, 35,
-            37, 38, 39, 40, 41, 42, 43,
-            24, 25, 26, 27, 36};
+            20, 21, 22, 23, 24,
+            28, 29, 30, 31, 32, 33, 34,
+            37, 38, 39, 41, 42, 43};
     private static final Set<PotionEffectType> BUFFS = Set.copyOf(EFFECTS.subList(0, 19));
     private static final String[] ROMAN = {"", "I", "II", "III"};
     private static final int MAX_EFFECT_LEVEL = Role.MAX_EFFECT_LEVEL;
@@ -82,25 +82,27 @@ public final class RoleEditorGUI extends BaseGUI {
     private final Mode mode;
     private final Role role;
     private final String originalId;
-    private boolean autoId;
     private boolean finished;
 
-    private RoleEditorGUI(HANNYOUPlugin plugin, Player player, Mode mode, Role role, boolean autoId) {
+    private RoleEditorGUI(HANNYOUPlugin plugin, Player player, Mode mode, Role role) {
         super(plugin, player);
         this.mode = mode;
         this.role = role;
         this.originalId = role.getId();
-        this.autoId = autoId;
-        this.totalPages = 4;
+        this.totalPages = 3;
     }
 
+    /** role id は空のまま始め、保存する前に入力してもらう */
     public static RoleEditorGUI create(HANNYOUPlugin plugin, Player player) {
-        return new RoleEditorGUI(plugin, player, Mode.CREATE,
-                new Role(plugin.getRoleManager().nextAutoId(), "新規役職"), true);
+        return new RoleEditorGUI(plugin, player, Mode.CREATE, new Role("", "新規役職"));
     }
 
     public static RoleEditorGUI edit(HANNYOUPlugin plugin, Player player, Role role) {
-        return new RoleEditorGUI(plugin, player, Mode.EDIT, role.copy(), false);
+        return new RoleEditorGUI(plugin, player, Mode.EDIT, role.copy());
+    }
+
+    private String roleIdLabel() {
+        return role.getId().isEmpty() ? "§c未設定" : "§f" + role.getId();
     }
 
     @Override
@@ -117,19 +119,19 @@ public final class RoleEditorGUI extends BaseGUI {
     @Override
     protected void render() {
         switch (currentPage) {
-            case PAGE_EQUIPMENT -> renderEquipment();
+            case PAGE_MAIN -> renderMain();
             case PAGE_INVENTORY -> renderInventory();
             case PAGE_EFFECTS -> renderEffects();
-            case PAGE_SYSTEM -> renderSystem();
             default -> {}
         }
         addNavigationButtons();
         addActionButtons();
     }
 
-    private void renderEquipment() {
+    private void renderMain() {
         fillBackground();
         EQUIPMENT_SLOTS.forEach((equipSlot, slot) -> set(slot, role.getEquipment(equipSlot)));
+        renderSettings();
     }
 
     private void renderInventory() {
@@ -143,7 +145,7 @@ public final class RoleEditorGUI extends BaseGUI {
 
     private void renderEffects() {
         for (int i = 0; i < EFFECT_SLOTS.length; i++) renderEffect(i);
-        fillGlass(BOTTOM_GLASS);
+        fillBackground();
     }
 
     private void renderEffect(int index) {
@@ -167,8 +169,7 @@ public final class RoleEditorGUI extends BaseGUI {
         ItemStack potion = new ItemStack(Material.POTION);
         boolean isBuff = BUFFS.contains(type);
         String color = isBuff ? "§a" : "§c";
-        String key = type.getKey().getKey();
-        String name = key.substring(0, 1).toUpperCase() + key.substring(1);
+        String name = effectName(type);
 
         potion.editMeta(PotionMeta.class, meta -> {
             if (level > 0) {
@@ -186,21 +187,31 @@ public final class RoleEditorGUI extends BaseGUI {
         return potion;
     }
 
-    private void renderSystem() {
-        fillBackground();
+    /** night_vision → Night Vision */
+    public static String effectName(PotionEffectType type) {
+        StringBuilder name = new StringBuilder();
+        for (String word : type.getKey().getKey().split("_")) {
+            if (!name.isEmpty()) name.append(' ');
+            name.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return name.toString();
+    }
+
+    /** role id・アイコン（アイテムを置いて変える）・表示名 */
+    private void renderSettings() {
         set(SLOT_ICON, role.getIcon());
 
-        List<String> idLore = new ArrayList<>(List.of("§7現在: §f" + role.getId(), "", "§eクリックで変更"));
+        List<String> idLore = new ArrayList<>(List.of("§7現在: " + roleIdLabel(), "", "§eクリックで変更"));
         idLore.add(mode == Mode.CREATE
-                ? "§c※空欄の場合は自動でIDが割り振られます"
+                ? "§c※保存する前に入力してください"
                 : "§c※変更すると適用中のプレイヤーに影響します");
-        button(SLOT_SYSTEM_ID, Items.named(new ItemStack(Material.COMMAND_BLOCK), "§6システムID設定", idLore),
+        button(SLOT_ROLE_ID, Items.named(new ItemStack(Material.COMMAND_BLOCK), "§6role id 設定", idLore),
                 e -> { playClickSound(); promptId(); });
 
         if (mode == Mode.CREATE) {
             button(SLOT_NAME, Items.item(Material.BOOK, "§b役職情報",
                             "§7表示名: " + role.getDisplayName(),
-                            "§7ID: " + role.getId(),
+                            "§7role id: " + roleIdLabel(),
                             "§eクリックで表示名を変更"),
                     e -> { playClickSound(); promptName(); });
         } else {
@@ -232,13 +243,6 @@ public final class RoleEditorGUI extends BaseGUI {
                         "§7試着を終えると持ち物が戻り、この画面に戻ります",
                         "§eクリックで試着"),
                 e -> { playClickSound(); tryOn(); });
-
-        if (!create) {
-            button(SLOT_EXPORT, Items.item(Material.BOOKSHELF, "§bこの役職をエクスポート",
-                            "§7exports/ フォルダにYMLで出力します",
-                            "§eクリックでエクスポート"),
-                    e -> { playClickSound(); export(); });
-        }
     }
 
     private void importFromHand() {
@@ -273,9 +277,8 @@ public final class RoleEditorGUI extends BaseGUI {
 
     private boolean isEditable(int rawSlot) {
         return switch (currentPage) {
-            case PAGE_EQUIPMENT -> EQUIPMENT_SLOT_SET.contains(rawSlot);
+            case PAGE_MAIN -> EQUIPMENT_SLOT_SET.contains(rawSlot) || rawSlot == SLOT_ICON;
             case PAGE_INVENTORY -> rawSlot >= 0 && rawSlot < 27 || rawSlot >= 36 && rawSlot < 45;
-            case PAGE_SYSTEM -> rawSlot == SLOT_ICON;
             default -> false;
         };
     }
@@ -292,7 +295,7 @@ public final class RoleEditorGUI extends BaseGUI {
         int raw = event.getRawSlot();
         if (raw >= SIZE) {
             // 自分のインベントリ操作は自由。シフトクリックはアイテムを置けるページのみ
-            if (event.isShiftClick() && currentPage != PAGE_EQUIPMENT && currentPage != PAGE_INVENTORY) {
+            if (event.isShiftClick() && currentPage == PAGE_EFFECTS) {
                 event.setCancelled(true);
             }
             return;
@@ -318,15 +321,14 @@ public final class RoleEditorGUI extends BaseGUI {
     /** 現在のページでGUIに置かれたアイテムを作業コピーへ取り込む */
     private void capture() {
         switch (currentPage) {
-            case PAGE_EQUIPMENT -> EQUIPMENT_SLOTS.forEach((equipSlot, slot) ->
-                    role.setEquipment(equipSlot, cloneOf(get(slot))));
+            case PAGE_MAIN -> {
+                EQUIPMENT_SLOTS.forEach((equipSlot, slot) -> role.setEquipment(equipSlot, cloneOf(get(slot))));
+                ItemStack icon = get(SLOT_ICON);
+                if (!Role.isEmpty(icon)) role.setIcon(icon.clone());
+            }
             case PAGE_INVENTORY -> {
                 for (int i = 0; i < Role.INVENTORY_SIZE; i++) role.setInventoryItem(i, cloneOf(get(i)));
                 for (int i = 0; i < Role.HOTBAR_SIZE; i++) role.setHotbarItem(i, cloneOf(get(36 + i)));
-            }
-            case PAGE_SYSTEM -> {
-                ItemStack icon = get(SLOT_ICON);
-                if (!Role.isEmpty(icon)) role.setIcon(icon.clone());
             }
             default -> {}
         }
@@ -337,13 +339,13 @@ public final class RoleEditorGUI extends BaseGUI {
     }
 
     // ─────────────────────────────────────────────
-    // 入力（ID・表示名）
+    // 入力（role id・表示名）
     // ─────────────────────────────────────────────
 
     private void promptId() {
         capture();
-        transition(() -> TextPrompt.open(plugin, player, "§6システムIDを入力",
-                Items.item(Material.PAPER, "§f新しいIDを入力",
+        transition(() -> TextPrompt.open(plugin, player, "§6role id を入力",
+                Items.item(Material.PAPER, "§f新しい role id を入力",
                         "§7半角英数字とアンダースコアのみ使用可能",
                         "§7例: warrior_01, mage_02"),
                 this::updateId, this::open));
@@ -361,23 +363,16 @@ public final class RoleEditorGUI extends BaseGUI {
     private void updateId(String input) {
         RoleManager roles = plugin.getRoleManager();
         if (input.isEmpty()) {
-            if (mode == Mode.CREATE) {
-                String id = roles.nextAutoId();
-                role.setId(id);
-                autoId = true;
-                sendMessage("§aIDを自動生成しました: " + id);
-                playSuccessSound();
-            }
+            // 何も入力しなければ変更しない
         } else if (!RoleManager.ID_PATTERN.matcher(input).matches()) {
-            sendMessage("§cIDは半角英数字とアンダースコアのみ使用できます");
+            sendMessage("§crole id は半角英数字とアンダースコアのみ使用できます");
             playErrorSound();
         } else if (roles.exists(input) && !(mode == Mode.EDIT && input.equals(originalId))) {
-            sendMessage("§cID「" + input + "」は既に存在します");
+            sendMessage("§crole id「" + input + "」は既に存在します");
             playErrorSound();
         } else {
             role.setId(input);
-            autoId = false;
-            sendMessage("§aシステムIDを「" + input + "」に更新しました");
+            sendMessage("§arole id を「" + input + "」に更新しました");
             playSuccessSound();
         }
         open();
@@ -399,7 +394,7 @@ public final class RoleEditorGUI extends BaseGUI {
     }
 
     // ─────────────────────────────────────────────
-    // 保存・エクスポート
+    // 保存
     // ─────────────────────────────────────────────
 
     private void save() {
@@ -412,30 +407,31 @@ public final class RoleEditorGUI extends BaseGUI {
                 playErrorSound();
                 return;
             }
+            if (role.getId().isEmpty()) {
+                sendMessage("§c先に role id を入力してください（1ページ目）");
+                playErrorSound();
+                return;
+            }
             if (roles.exists(role.getId())) {
-                // 編集中に他の管理者が同じIDで作成した場合
-                if (!autoId) {
-                    sendMessage("§cID「" + role.getId() + "」は既に存在します");
-                    playErrorSound();
-                    return;
-                }
-                role.setId(roles.nextAutoId());
-                sendMessage("§eIDを自動生成しました: " + role.getId());
+                // 編集中に他の OP が同じ role id で作成した場合
+                sendMessage("§crole id「" + role.getId() + "」は既に存在します");
+                playErrorSound();
+                return;
             }
             roles.save(role);
             plugin.getAuditLogger().log(player, AuditLogger.Action.ROLE_CREATE, role.getId(),
                     "表示名: " + role.getDisplayName());
             sendMessage("§a役職「" + role.getDisplayName() + "」を保存しました");
-            sendMessage("§7ID: " + role.getId());
+            sendMessage("§7role id: " + role.getId());
         } else {
             Role before = roles.get(originalId);
             if (!role.getId().equals(originalId)) {
                 if (roles.exists(role.getId())) {
-                    sendMessage("§cID「" + role.getId() + "」は既に存在します");
+                    sendMessage("§crole id「" + role.getId() + "」は既に存在します");
                     playErrorSound();
                     return;
                 }
-                roles.rename(originalId, role);
+                plugin.getRoleApplier().renameRole(originalId, role);
             } else {
                 roles.save(role);
             }
@@ -448,21 +444,5 @@ public final class RoleEditorGUI extends BaseGUI {
         finished = true;
         playSuccessSound();
         closeLater();
-    }
-
-    private void export() {
-        capture();
-        String roleId = role.getId();
-        plugin.getRoleTransfer().exportRole(role).thenAccept(fileName -> {
-            if (!player.isOnline()) return;
-            if (fileName != null) {
-                sendMessage("§aエクスポートしました: exports/" + fileName);
-                plugin.getAuditLogger().log(player, AuditLogger.Action.ROLE_EXPORT, roleId, "file: " + fileName);
-                playSuccessSound();
-            } else {
-                sendMessage("§cエクスポートに失敗しました。");
-                playErrorSound();
-            }
-        });
     }
 }

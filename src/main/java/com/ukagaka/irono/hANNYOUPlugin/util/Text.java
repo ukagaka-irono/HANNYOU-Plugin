@@ -1,11 +1,15 @@
 package com.ukagaka.irono.hANNYOUPlugin.util;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.entity.Player;
+
+import java.util.function.Consumer;
 
 /**
  * §カラーコード文字列 ⇔ Adventure Component の変換。
@@ -26,6 +30,19 @@ public final class Text {
     public static Component runButton(String legacy, String command, String hoverLegacy) {
         return of(legacy)
                 .clickEvent(ClickEvent.runCommand(command))
+                .hoverEvent(HoverEvent.showText(of(hoverLegacy)));
+    }
+
+    /**
+     * クリックで処理を実行するチャットボタン（コマンドを登録せずに済む。クリックできるのは12時間まで）。
+     * @param uses クリックできる回数（ClickCallback.UNLIMITED_USES で無制限）
+     */
+    public static Component callbackButton(String legacy, String hoverLegacy, int uses, Consumer<Player> action) {
+        ClickCallback.Options options = ClickCallback.Options.builder().uses(uses).build();
+        return of(legacy)
+                .clickEvent(ClickEvent.callback(audience -> {
+                    if (audience instanceof Player player) action.accept(player);
+                }, options))
                 .hoverEvent(HoverEvent.showText(of(hoverLegacy)));
     }
 

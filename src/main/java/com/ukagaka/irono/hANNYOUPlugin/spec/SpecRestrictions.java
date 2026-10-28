@@ -1,6 +1,7 @@
 package com.ukagaka.irono.hANNYOUPlugin.spec;
 
 import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
+import io.papermc.paper.event.player.PlayerPickItemEvent;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -15,9 +16,13 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
+import org.bukkit.event.inventory.InventoryAction;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCreativeEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
@@ -33,6 +38,7 @@ import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
  * スペク中のプレイヤーがゲームに影響を与えないようにする。
  * ブロック操作・アイテムの出し入れ・攻撃・乗り物などを禁止し、
  * 飛び道具や感圧板などに対しても「そこにいない」ように扱う。
+ * クリエイティブでアイテムを新しく手に入れることもできないようにする（ほかのプラグインで売る・渡すなどの抜け道を防ぐ）。
  */
 public final class SpecRestrictions implements Listener {
     private final SpecManager spec;
@@ -82,6 +88,32 @@ public final class SpecRestrictions implements Listener {
     }
 
     // ─── アイテム ───
+
+    /**
+     * クリエイティブインベントリでの操作（好きなアイテムを取り出せる）と、中クリックでの複製を止める。
+     * InventoryCreativeEvent も InventoryClickEvent として届く。
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!isSpec(event.getWhoClicked())) return;
+        cancelIf(event instanceof InventoryCreativeEvent || event.getAction() == InventoryAction.CLONE_STACK, event);
+    }
+
+    /** ブロックやエンティティを中クリックしてアイテムを手に入れる操作 */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onPickItem(PlayerPickItemEvent event) {
+        cancelIf(isSpec(event.getPlayer()), event);
+    }
+
+    /** 万一死んでも持ち物を地面に落とさない（解除時に、保存してある持ち物へ戻す） */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onDeath(PlayerDeathEvent event) {
+        if (!isSpec(event.getPlayer())) return;
+        event.setKeepInventory(true);
+        event.getDrops().clear();
+        event.setKeepLevel(true);
+        event.setDroppedExp(0);
+    }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {

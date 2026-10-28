@@ -53,7 +53,7 @@ public final class ConfirmDeleteGUI extends BaseGUI {
     private void delete() {
         Role current = plugin.getRoleManager().get(role.getId());
         if (current == null) {
-            sendMessage("§cRole not found: " + role.getId());
+            sendMessage("§c役職が見つかりません: " + role.getId());
             playErrorSound();
         } else {
             plugin.getRoleApplier().deleteRole(player, current);
