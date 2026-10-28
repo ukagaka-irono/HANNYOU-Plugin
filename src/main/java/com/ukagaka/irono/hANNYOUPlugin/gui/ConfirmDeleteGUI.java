@@ -13,7 +13,7 @@ public final class ConfirmDeleteGUI extends BaseGUI {
     private final Role role;
     private final Supplier<BaseGUI> back;
 
-    /** @param back 削除後・キャンセル後に開く画面 */
+    /** @param back 削除後・キャンセル後に開く画面（null なら画面を閉じる） */
     public ConfirmDeleteGUI(HANNYOUPlugin plugin, Player player, Role role, Supplier<BaseGUI> back) {
         super(plugin, player);
         this.role = role;
@@ -45,7 +45,7 @@ public final class ConfirmDeleteGUI extends BaseGUI {
                 e -> delete());
 
         button(15, Items.item(Material.RED_CONCRETE, "§cやめる", "§7削除せずに戻ります"),
-                e -> { playClickSound(); switchTo(back.get()); });
+                e -> { playClickSound(); leave(); });
 
         fillBackground();
     }
@@ -60,6 +60,11 @@ public final class ConfirmDeleteGUI extends BaseGUI {
             sendMessage("§a役職「" + current.getDisplayName() + "§a」を削除しました");
             playSuccessSound();
         }
-        switchTo(back.get());
+        leave();
+    }
+
+    private void leave() {
+        if (back == null) closeLater();
+        else switchTo(back.get());
     }
 }

@@ -11,6 +11,7 @@ import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import com.ukagaka.irono.hANNYOUPlugin.Permissions;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
 import com.ukagaka.irono.hANNYOUPlugin.gui.AssignGUI;
+import com.ukagaka.irono.hANNYOUPlugin.gui.ConfirmDeleteGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.MainMenuGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.RoleEditorGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.RoleListGUI;
@@ -25,17 +26,14 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
@@ -44,14 +42,10 @@ import java.util.function.Predicate;
  */
 public final class KnightsCommand {
     public static final String BASE = "/hannyou knights";
-    private static final UUID CONSOLE = new UUID(0, 0);
     private static final Predicate<CommandSourceStack> ADMIN =
             src -> src.getSender().hasPermission(Permissions.KNIGHTS_ADMIN);
 
-    private record PendingDeletion(String roleId, BukkitTask timeout) {}
-
     private final HANNYOUPlugin plugin;
-    private final Map<UUID, PendingDeletion> pendingDeletions = new HashMap<>();
 
     public KnightsCommand(HANNYOUPlugin plugin) {
         this.plugin = plugin;
@@ -123,13 +117,7 @@ public final class KnightsCommand {
                                 .executes(ctx -> spec(ctx, false))))
                 .then(Commands.literal("roleremove")
                         .requires(ADMIN)
-                        .then(roleArg(roleIds, (sender, role) -> scheduleRemoval(sender, role))))
-                .then(Commands.literal("roleaccept")
-                        .requires(ADMIN)
-                        .executes(ctx -> confirmRemoval(ctx.getSource().getSender())))
-                .then(Commands.literal("rolecancel")
-                        .requires(ADMIN)
-                        .executes(ctx -> cancelRemoval(ctx.getSource().getSender())))
+                        .then(roleArg(roleIds, this::openConfirmDelete)))
                 .then(Commands.literal("export")
                         .requires(ADMIN)
                         .executes(ctx -> export(ctx.getSource().getSender(), "all"))
@@ -203,6 +191,13 @@ public final class KnightsCommand {
         Player player = requirePlayer(sender);
         if (player == null) return 0;
         RoleEditorGUI.edit(plugin, player, role).open();
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int openConfirmDelete(CommandSender sender, Role role) {
+        Player player = requirePlayer(sender);
+        if (player == null) return 0;
+        new ConfirmDeleteGUI(plugin, player, role, null).open();
         return Command.SINGLE_SUCCESS;
     }
 
@@ -291,7 +286,7 @@ public final class KnightsCommand {
                 .append(Text.of(" "))
                 .append(Text.runButton("§6【付与】", BASE + " assign " + id, "§7付与するプレイヤーを選ぶ"))
                 .append(Text.of(" "))
-                .append(Text.runButton("§c【削除】", BASE + " roleremove " + id, "§7削除の確認へ進む")));
+                .append(Text.runButton("§c【削除】", BASE + " roleremove " + id, "§7削除の確認画面を開く")));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -456,71 +451,6 @@ public final class KnightsCommand {
     }
 
     // ─────────────────────────────────────────────
-    // roleremove / roleaccept / rolecancel
-    // ─────────────────────────────────────────────
-
-    private static UUID key(CommandSender sender) {
-        return sender instanceof Player player ? player.getUniqueId() : CONSOLE;
-    }
-
-    private int scheduleRemoval(CommandSender sender, Role role) {
-        UUID key = key(sender);
-        PendingDeletion previous = pendingDeletions.remove(key);
-        if (previous != null) previous.timeout().cancel();
-
-        int timeoutSeconds = plugin.getPluginConfig().deletionTimeoutSeconds();
-        BukkitTask timeout = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (pendingDeletions.remove(key) != null) send(sender, "§eRole deletion cancelled (timeout)");
-        }, timeoutSeconds * 20L);
-        pendingDeletions.put(key, new PendingDeletion(role.getId(), timeout));
-
-        send(sender, "§e=== Role Deletion Scheduled ===");
-        send(sender, "§6Role ID: §f" + role.getId());
-        send(sender, "§6Display Name: §f" + role.getDisplayName());
-        send(sender, "§6オンラインの保持者: §f" + plugin.getRoleManager().onlineHolders(role.getId()).size() + "人"
-                + " §7（タグと役職の効果を外します）");
-        send(sender, "§cWarning: This cannot be undone!");
-        sender.sendMessage(Text.of("§aTo confirm: §f" + BASE + " roleaccept  ")
-                .append(Text.runButton("§c§l【削除する】", BASE + " roleaccept", "§c役職を削除します"))
-                .append(Text.of(" "))
-                .append(Text.runButton("§7§l【やめる】", BASE + " rolecancel", "§7削除を取り消します")));
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private int confirmRemoval(CommandSender sender) {
-        PendingDeletion pending = pendingDeletions.remove(key(sender));
-        if (pending == null) {
-            send(sender, "§cNo pending role deletion");
-            return 0;
-        }
-        pending.timeout().cancel();
-
-        Role role = plugin.getRoleManager().get(pending.roleId());
-        if (role == null) {
-            send(sender, "§cRole not found");
-            return 0;
-        }
-
-        plugin.getRoleApplier().deleteRole(sender, role);
-
-        send(sender, "§a=== Role Deleted ===");
-        send(sender, "§aRole ID: §f" + pending.roleId());
-        send(sender, "§aDisplay Name: §f" + role.getDisplayName());
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private int cancelRemoval(CommandSender sender) {
-        PendingDeletion pending = pendingDeletions.remove(key(sender));
-        if (pending == null) {
-            send(sender, "§cNo pending role deletion");
-            return 0;
-        }
-        pending.timeout().cancel();
-        send(sender, "§eRole deletion cancelled");
-        return Command.SINGLE_SUCCESS;
-    }
-
-    // ─────────────────────────────────────────────
     // help
     // ─────────────────────────────────────────────
 
@@ -536,8 +466,7 @@ public final class KnightsCommand {
             {"edit", " <role_id>", "エディタを開く"},
             {"spec", " <player|@selector>", "見えない・ぶつからない・操作できないクリエイティブにする"},
             {"unspec", " <player|@selector>", "スペクモードを解除"},
-            {"roleremove", " <role_id>", "Schedule deletion"},
-            {"roleaccept", "", "Confirm deletion"},
+            {"roleremove", " <role_id>", "削除の確認画面を開く"},
             {"export", " [role_id|all]", "Export role(s) to YAML"},
             {"import", " [filename] [overwrite]", "Import role(s) from YAML"},
             {"reload", "", "config.yml を再読み込み"},

@@ -135,9 +135,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 | `/hannyou knights edit <役職ID>` | エディタを開く |
 | `/hannyou knights spec <対象>` | [スペクモード](#スペクモード)にする |
 | `/hannyou knights unspec <対象>` | スペクモードを解除する |
-| `/hannyou knights roleremove <役職ID>` | 削除を予約する（確定待ちは `deletion-timeout` 秒） |
-| `/hannyou knights roleaccept` | 予約した削除を確定する |
-| `/hannyou knights rolecancel` | 予約した削除を取り消す |
+| `/hannyou knights roleremove <役職ID>` | 削除の確認画面を開き、「削除する」か「やめる」を選ぶ |
 | `/hannyou knights export [役職ID\|all]` | YAML に出力する（省略時は全件） |
 | `/hannyou knights import [ファイル名] [overwrite]` | YAML から読み込む（省略時はファイル一覧を表示） |
 | `/hannyou knights reload` | `config.yml` を読み直す |
@@ -166,8 +164,6 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 log-role-changes: true
 
 settings:
-  # /hannyou knights roleremove 後、確定を待つ秒数
-  deletion-timeout: 30
   # 登録できる役職の最大数 (-1 = 無制限)
   max-roles: -1
   # 参加時に役職の装備・インベントリを再配布する (false の場合はポーション効果のみ再適用)
