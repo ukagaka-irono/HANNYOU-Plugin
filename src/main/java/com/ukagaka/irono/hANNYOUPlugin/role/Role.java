@@ -4,7 +4,6 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
 
-import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -77,18 +76,6 @@ public final class Role {
     public void setEffectLevel(PotionEffectType type, int level) {
         if (level <= 0) effects.remove(type);
         else effects.put(type, level);
-    }
-
-    /** 内容がすべて同じか（未保存の変更があるかの判定に使う） */
-    public boolean sameAs(Role other) {
-        return other != null
-                && id.equals(other.id)
-                && displayName.equals(other.displayName)
-                && icon.equals(other.icon)
-                && equipment.equals(other.equipment)
-                && Arrays.equals(inventory, other.inventory)
-                && Arrays.equals(hotbar, other.hotbar)
-                && effects.equals(other.effects);
     }
 
     public static boolean isEmpty(ItemStack item) {

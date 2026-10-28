@@ -39,7 +39,6 @@ public final class RoleEditorGUI extends BaseGUI {
     private static final int SLOT_FROM_HAND = 47;
     private static final int SLOT_EXPORT = 48;
     private static final int SLOT_TRY = 51;
-    private static final int SLOT_ASSIGN = 52;
     private static final int SLOT_CLOSE = 49;
     private static final int SLOT_SAVE = 50;
     private static final int SLOT_SYSTEM_ID = 13;
@@ -239,11 +238,6 @@ public final class RoleEditorGUI extends BaseGUI {
                             "§7exports/ フォルダにYMLで出力します",
                             "§eクリックでエクスポート"),
                     e -> { playClickSound(); export(); });
-
-            button(SLOT_ASSIGN, Items.item(Material.PLAYER_HEAD, "§6プレイヤーに付与",
-                            "§7保存済みの役職をオンラインのプレイヤーに付与します",
-                            "§eクリックでプレイヤーを選択"),
-                    e -> openAssign());
         }
     }
 
@@ -271,18 +265,6 @@ public final class RoleEditorGUI extends BaseGUI {
             player.closeInventory();
             plugin.getTrialManager().start(player, snapshot, this::open);
         });
-    }
-
-    private void openAssign() {
-        capture();
-        Role saved = plugin.getRoleManager().get(originalId);
-        if (saved == null || !saved.sameAs(role)) {
-            sendMessage("§e先に役職を保存してください（付与できるのは保存済みの内容です）");
-            playErrorSound();
-            return;
-        }
-        playClickSound();
-        switchTo(new AssignGUI(plugin, player, originalId, () -> this));
     }
 
     // ─────────────────────────────────────────────
