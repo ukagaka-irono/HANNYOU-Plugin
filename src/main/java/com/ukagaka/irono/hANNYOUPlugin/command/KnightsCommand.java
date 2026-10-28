@@ -110,9 +110,7 @@ public final class KnightsCommand {
                                         StringArgumentType.getString(ctx, "file"), false))
                                 .then(Commands.literal("overwrite")
                                         .executes(ctx -> importFile(ctx.getSource().getSender(),
-                                                StringArgumentType.getString(ctx, "file"), true)))))
-                .then(Commands.literal("reload")
-                        .executes(ctx -> reload(ctx.getSource().getSender())));
+                                                StringArgumentType.getString(ctx, "file"), true)))));
     }
 
     @FunctionalInterface
@@ -337,7 +335,7 @@ public final class KnightsCommand {
     }
 
     // ─────────────────────────────────────────────
-    // export / import / reload
+    // export / import
     // ─────────────────────────────────────────────
 
     private int export(CommandSender sender, String target) {
@@ -414,12 +412,6 @@ public final class KnightsCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    private int reload(CommandSender sender) {
-        plugin.reloadPluginConfig();
-        send(sender, "§aconfig.yml を再読み込みしました");
-        return Command.SINGLE_SUCCESS;
-    }
-
     // ─────────────────────────────────────────────
     // help
     // ─────────────────────────────────────────────
@@ -436,7 +428,6 @@ public final class KnightsCommand {
             {"roleremove", " <role_id>", "削除の確認画面を開く"},
             {"export", " [role_id|all]", "Export role(s) to YAML"},
             {"import", " [filename] [overwrite]", "Import role(s) from YAML"},
-            {"reload", "", "config.yml を再読み込み"},
     };
 
     private int help(CommandSender sender) {

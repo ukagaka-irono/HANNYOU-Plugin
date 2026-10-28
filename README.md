@@ -126,7 +126,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 
 ## コマンド
 
-すべて `/hannyou knights` から始まります。`/hannyou` だけを打つとヘルプが表示されます。ヘルプやボタンの多くはチャット上でクリックできます。
+`/hannyou reload` 以外は、すべて `/hannyou knights` から始まります。`/hannyou` だけを打つとヘルプが表示されます。ヘルプやボタンの多くはチャット上でクリックできます。
 
 | コマンド | 説明 |
 |---|---|
@@ -141,7 +141,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 | `/hannyou knights roleremove <役職ID>` | 削除の確認画面を開き、「削除する」か「やめる」を選ぶ |
 | `/hannyou knights export [役職ID\|all]` | YAML に出力する（省略時は全件） |
 | `/hannyou knights import [ファイル名] [overwrite]` | YAML から読み込む（省略時はファイル一覧を表示） |
-| `/hannyou knights reload` | `config.yml` を読み直す |
+| `/hannyou reload` | `config.yml` を読み直す |
 
 `<対象>` にはプレイヤー名のほか、`@a` `@s` `@p` `@r` などのセレクターが使えます。
 
@@ -167,7 +167,7 @@ settings:
   reapply-items-on-join: true
 ```
 
-変更したら `/hannyou knights reload` で反映できます。
+変更したら `/hannyou reload` で反映できます。
 
 ## データの保存先
 
