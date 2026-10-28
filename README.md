@@ -34,9 +34,11 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 
 ## 使い方
 
-まずは `/hannyou knights menu` でメインメニューを開いてください。
+`/hannyou knights itiran` で役職一覧を、`/hannyou knights editor` で新しい役職のエディタを開けます。既存の役職を編集するときは `/hannyou knights editor <役職ID>` を使います。
 
 ### メインメニュー
+
+役職一覧の「メインメニューに戻る」から開けます。
 
 | ボタン | 内容 |
 |---|---|
@@ -132,13 +134,13 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 
 | コマンド | 説明 |
 |---|---|
-| `/hannyou knights menu` | メインメニューを開く |
+| `/hannyou knights itiran` | 役職一覧を GUI で開く |
 | `/hannyou knights list` | 役職の一覧 |
 | `/hannyou knights info <役職ID>` | 役職の中身。【編集】【試着】【削除】ボタン付き |
 | `/hannyou knights role <対象> <役職ID>` | 役職を付与する |
 | `/hannyou knights try <役職ID>` | 役職を試着する |
 | `/hannyou knights untry` | 試着を終了する |
-| `/hannyou knights edit <役職ID>` | エディタを開く |
+| `/hannyou knights editor [役職ID]` | 役職を新規作成するエディタを開く。役職IDを指定すると、その役職を編集する |
 | `/hannyou knights spec [対象]` | [スペクモード](#スペクモード)にする（省略時は自分） |
 | `/hannyou knights unspec [対象]` | スペクモードを解除する（省略時は自分） |
 | `/hannyou knights roleremove <役職ID>` | 削除の確認画面を開き、「削除する」か「やめる」を選ぶ |
@@ -155,12 +157,7 @@ Knights Editor は KnightsEditor を移植し、GUI の見た目はそのまま�
 
 ## 権限
 
-| 権限 | 説明 | 既定 |
-|---|---|---|
-| `hannyou.knights.admin` | すべてのコマンドと GUI | OP |
-| `hannyou.knights.menu` | `/hannyou knights menu` でメニューを開き、役職一覧を見る（作成・編集・試着・付与・削除・インポートは `hannyou.knights.admin` が必要） | OP |
-
-権限を持っていないプレイヤーには、コマンド自体が表示されません。
+すべてのコマンドと GUI は **OP だけ**が使えます（コンソールからも実行できます）。OP でないプレイヤーには、コマンド自体が表示されません。GUI を開いている途中で OP を外された場合も、それ以上は操作できません。
 
 ## 設定（config.yml）
 

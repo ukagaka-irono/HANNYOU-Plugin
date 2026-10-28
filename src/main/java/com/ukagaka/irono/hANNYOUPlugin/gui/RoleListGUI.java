@@ -38,12 +38,6 @@ public final class RoleListGUI extends BaseGUI {
         currentPage = Math.min(currentPage, totalPages);
     }
 
-    /** 管理者でなくても一覧と検索は使える。編集・付与などの操作は管理者のみ */
-    @Override
-    protected boolean viewableWithoutAdmin() {
-        return true;
-    }
-
     @Override
     protected String title() {
         return searchQuery.isEmpty()
@@ -66,7 +60,6 @@ public final class RoleListGUI extends BaseGUI {
                             "§6Shift+右クリック: プレイヤーに付与",
                             "§cQキー: 削除")),
                     e -> {
-                        if (!requireAdmin()) return;
                         playClickSound();
                         Role current = plugin.getRoleManager().get(role.getId());
                         if (current == null) return;

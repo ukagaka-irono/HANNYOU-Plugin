@@ -83,7 +83,7 @@ public final class AuditLogger {
                 + "§7 -> §b" + roleId
                 + (hasDetail ? "§7 | §f" + detail : ""));
         for (Player online : Bukkit.getOnlinePlayers()) {
-            if (online.hasPermission(Permissions.KNIGHTS_ADMIN)) online.sendMessage(chat);
+            if (Permissions.isOperator(online)) online.sendMessage(chat);
         }
     }
 

@@ -1,14 +1,12 @@
 package com.ukagaka.irono.hANNYOUPlugin;
 
-import org.bukkit.permissions.Permissible;
+import org.bukkit.permissions.ServerOperator;
 
+/** このプラグインのコマンドと GUI は OP だけが使える */
 public final class Permissions {
-    public static final String KNIGHTS_ADMIN = "hannyou.knights.admin";
-    public static final String KNIGHTS_MENU = "hannyou.knights.menu";
-
     private Permissions() {}
 
-    public static boolean canUseKnights(Permissible target) {
-        return target.hasPermission(KNIGHTS_ADMIN) || target.hasPermission(KNIGHTS_MENU);
+    public static boolean isOperator(ServerOperator target) {
+        return target.isOp();
     }
 }

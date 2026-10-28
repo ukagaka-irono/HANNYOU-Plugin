@@ -19,7 +19,7 @@ public final class HannyouCommand {
 
     public LiteralCommandNode<CommandSourceStack> build() {
         return Commands.literal("hannyou")
-                .requires(src -> Permissions.canUseKnights(src.getSender()))
+                .requires(src -> Permissions.isOperator(src.getSender()))
                 .executes(ctx -> help(ctx.getSource().getSender()))
                 .then(knights.node())
                 .build();

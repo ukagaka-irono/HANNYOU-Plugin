@@ -8,11 +8,10 @@ import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
-import com.ukagaka.irono.hANNYOUPlugin.Permissions;
 import com.ukagaka.irono.hANNYOUPlugin.audit.AuditLogger;
 import com.ukagaka.irono.hANNYOUPlugin.gui.ConfirmDeleteGUI;
-import com.ukagaka.irono.hANNYOUPlugin.gui.MainMenuGUI;
 import com.ukagaka.irono.hANNYOUPlugin.gui.RoleEditorGUI;
+import com.ukagaka.irono.hANNYOUPlugin.gui.RoleListGUI;
 import com.ukagaka.irono.hANNYOUPlugin.role.Role;
 import com.ukagaka.irono.hANNYOUPlugin.transfer.RoleTransfer;
 import com.ukagaka.irono.hANNYOUPlugin.util.Text;
@@ -31,7 +30,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Predicate;
 
 /**
  * /hannyou knights サブコマンド（Brigadier）。
@@ -39,8 +37,6 @@ import java.util.function.Predicate;
  */
 public final class KnightsCommand {
     public static final String BASE = "/hannyou knights";
-    private static final Predicate<CommandSourceStack> ADMIN =
-            src -> src.getSender().hasPermission(Permissions.KNIGHTS_ADMIN);
 
     private final HANNYOUPlugin plugin;
 
@@ -73,50 +69,41 @@ public final class KnightsCommand {
 
         return Commands.literal("knights")
                 .executes(ctx -> help(ctx.getSource().getSender()))
-                .then(Commands.literal("menu")
-                        .executes(ctx -> openMenu(ctx.getSource().getSender())))
+                .then(Commands.literal("itiran")
+                        .executes(ctx -> openRoleList(ctx.getSource().getSender())))
                 .then(Commands.literal("list")
-                        .requires(ADMIN)
                         .executes(ctx -> list(ctx.getSource().getSender())))
                 .then(Commands.literal("info")
-                        .requires(ADMIN)
                         .then(roleArg(roleIds, (sender, role) -> info(sender, role))))
-                .then(Commands.literal("edit")
-                        .requires(ADMIN)
-                        .then(roleArg(roleIds, this::edit)))
+                .then(Commands.literal("editor")
+                        .executes(ctx -> createRole(ctx.getSource().getSender()))
+                        .then(roleArg(roleIds, this::editRole)))
                 .then(Commands.literal("try")
-                        .requires(ADMIN)
                         .then(roleArg(roleIds, this::tryOn)))
                 .then(Commands.literal("untry")
                         .executes(ctx -> untry(ctx.getSource().getSender())))
                 .then(Commands.literal("role")
-                        .requires(ADMIN)
                         .then(Commands.argument("targets", ArgumentTypes.players())
                                 .then(Commands.argument("role_id", StringArgumentType.word())
                                         .suggests(roleIds)
                                         .executes(this::applyRole))))
                 .then(Commands.literal("spec")
-                        .requires(ADMIN)
                         .executes(ctx -> specSelf(ctx.getSource().getSender(), true))
                         .then(Commands.argument("targets", ArgumentTypes.players())
                                 .executes(ctx -> spec(ctx, true))))
                 .then(Commands.literal("unspec")
-                        .requires(ADMIN)
                         .executes(ctx -> specSelf(ctx.getSource().getSender(), false))
                         .then(Commands.argument("targets", ArgumentTypes.players())
                                 .executes(ctx -> spec(ctx, false))))
                 .then(Commands.literal("roleremove")
-                        .requires(ADMIN)
                         .then(roleArg(roleIds, this::openConfirmDelete)))
                 .then(Commands.literal("export")
-                        .requires(ADMIN)
                         .executes(ctx -> export(ctx.getSource().getSender(), "all"))
                         .then(Commands.argument("target", StringArgumentType.word())
                                 .suggests(exportTargets)
                                 .executes(ctx -> export(ctx.getSource().getSender(),
                                         StringArgumentType.getString(ctx, "target")))))
                 .then(Commands.literal("import")
-                        .requires(ADMIN)
                         .executes(ctx -> listImportable(ctx.getSource().getSender()))
                         .then(Commands.argument("file", StringArgumentType.string())
                                 .suggests(importFiles)
@@ -126,7 +113,6 @@ public final class KnightsCommand {
                                         .executes(ctx -> importFile(ctx.getSource().getSender(),
                                                 StringArgumentType.getString(ctx, "file"), true)))))
                 .then(Commands.literal("reload")
-                        .requires(ADMIN)
                         .executes(ctx -> reload(ctx.getSource().getSender())));
     }
 
@@ -170,14 +156,22 @@ public final class KnightsCommand {
     // GUIを開くコマンド
     // ─────────────────────────────────────────────
 
-    private int openMenu(CommandSender sender) {
+    private int openRoleList(CommandSender sender) {
         Player player = requirePlayer(sender);
         if (player == null) return 0;
-        new MainMenuGUI(plugin, player).open();
+        new RoleListGUI(plugin, player).open();
         return Command.SINGLE_SUCCESS;
     }
 
-    private int edit(CommandSender sender, Role role) {
+    /** 役職IDを省略すると新規作成、指定するとその役職を編集する */
+    private int createRole(CommandSender sender) {
+        Player player = requirePlayer(sender);
+        if (player == null) return 0;
+        RoleEditorGUI.create(plugin, player).open();
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int editRole(CommandSender sender, Role role) {
         Player player = requirePlayer(sender);
         if (player == null) return 0;
         RoleEditorGUI.edit(plugin, player, role).open();
@@ -257,7 +251,7 @@ public final class KnightsCommand {
         send(sender, "§7効果: §f" + (effects.isEmpty() ? "なし" : String.join(", ", effects)));
 
         String id = role.getId();
-        sender.sendMessage(Text.runButton("§e【編集】", BASE + " edit " + id, "§7エディタを開く")
+        sender.sendMessage(Text.runButton("§e【編集】", BASE + " editor " + id, "§7エディタを開く")
                 .append(Text.of(" "))
                 .append(Text.runButton("§d【試着】", BASE + " try " + id, "§7自分に一時的に適用する"))
                 .append(Text.of(" "))
@@ -431,13 +425,13 @@ public final class KnightsCommand {
     // ─────────────────────────────────────────────
 
     private static final String[][] HELP = {
-            {"menu", "", "Open main menu"},
+            {"itiran", "", "役職一覧をGUIで開く"},
             {"list", "", "役職の一覧"},
             {"info", " <role_id>", "役職の詳細"},
             {"role", " <player|@selector> <role_id>", "Apply role (@a, @s, @p, @r 対応)"},
             {"try", " <role_id>", "役職を試着"},
             {"untry", "", "試着を終了"},
-            {"edit", " <role_id>", "エディタを開く"},
+            {"editor", " [role_id]", "役職を新規作成（IDを指定すると編集）"},
             {"spec", " [player|@selector]", "見えない・ぶつからない・操作できないクリエイティブにする"},
             {"unspec", " [player|@selector]", "スペクモードを解除"},
             {"roleremove", " <role_id>", "削除の確認画面を開く"},
