@@ -61,7 +61,6 @@ public final class HANNYOUPlugin extends JavaPlugin {
         if (guiListener != null) guiListener.closeAll();
         if (trialManager != null) trialManager.endAll();
         if (storage != null) storage.close();
-        if (auditLogger != null) auditLogger.close();
     }
 
     /** config.yml を読み直す */

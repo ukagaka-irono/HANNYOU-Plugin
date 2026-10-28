@@ -1,6 +1,6 @@
 # HANNYOU Plugin - Knights Editor 設定
 
-# 役職の作成・編集・削除などを監査ログ (logs/) と管理者チャットに記録する
+# 役職の作成・編集・削除などをサーバーのログと OP のチャットに記録する
 log-role-changes: true
 
 settings:
