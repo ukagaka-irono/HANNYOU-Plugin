@@ -41,7 +41,7 @@ public final class RoleStorage {
     public static final String FILE_NAME = "knights-role.yml";
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
     private static final List<String> HEADER = List.of(
-            "HANNYOU Plugin - Knights Editor の役職データ",
+            "汎用プラグイン（HANNYOU Plugin） - Knights Editor の役職データ",
             "手で編集するときは、サーバーを止めてから編集してください");
 
     private final Logger logger;

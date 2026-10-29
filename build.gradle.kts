@@ -19,6 +19,7 @@ dependencies {
 bukkitPluginYaml {
     main = "com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin"
     apiVersion = "26.1.2"
+    description = "汎用プラグイン — スペクモードと役職エディタ（Knights Editor）"
 
     load = BukkitPluginYaml.PluginLoadOrder.STARTUP
     authors.addAll("伺々　彩乃")

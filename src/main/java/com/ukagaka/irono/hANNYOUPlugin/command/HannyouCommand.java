@@ -36,7 +36,7 @@ public final class HannyouCommand {
     }
 
     private int help(CommandSender sender) {
-        send(sender, "§6=== HANNYOU Plugin ===");
+        send(sender, "§6=== 汎用プラグイン（HANNYOU Plugin） ===");
         helpLine(sender, "/hannyou knights", "", "役職の一覧・作成・付与・削除");
         helpLine(sender, "/hannyou spec", " [対象]", "見えない・ぶつからない・操作できないクリエイティブにする（省略時は自分）");
         helpLine(sender, "/hannyou unspec", " [対象]", "スペクモードを解除する（省略時は自分）");
