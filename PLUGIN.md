@@ -52,6 +52,7 @@ AI エージェントが作業の前に読む、このプラグインに固有�
 | `udemae.match.objective` / `holder` / `value` | `hannyou_match` / `""` / `1` | 試合中の判定。holder が空ならプレイヤーごとのスコア、`#game` などなら、その持ち主のスコアが value のとき試合中。**`hannyou_match` は仮の名前**（作者がデータパックのスコア名を教えてくれたら直す） |
 | `udemae.win-objective` / `lose-objective` | `_game_win` / `_game_lose` | 勝ち・負けのスコア。0 から 0 以外に変わったときに一度だけ数える |
 | `udemae.assist-seconds` | `10` | 倒される前の何秒以内の攻撃をアシストにするか |
+| `udemae.capture.objective` / `min` / `stay-seconds` | `_game_capture` / `1` / `5` | 占領の判定（占領はデータパックが管理する）。プレイヤーごとのスコアが min 以上なら占領中。占領地に stay-seconds 秒いるごとに `capture-stay`、占領中にプレイヤーを倒すと `capture-kill` / `capture-assist` を上乗せ。**`_game_capture` は仮の名前** |
 | `udemae.points.<行動>` | `UdemaeAction` の既定値 | 行動ごとのポイント（仮の数字。マイナスで減る）。キーは `UdemaeAction` を見る |
 
 既存のサーバーの `config.yml` に `udemae` が無くても、jar の中の既定値が使われる。
@@ -81,7 +82,7 @@ AI エージェントが作業の前に読む、このプラグインに固有�
 | `role` | 役職（`Role`、`RoleManager`、付与と参加時の照合 `RoleApplier`、試着 `TrialManager`） |
 | `spec` | スペクモード（`SpecManager`、操作の禁止 `SpecRestrictions`） |
 | `storage` | `knights-role.yml` の読み書き（`RoleStorage`、`RoleYaml`、`ItemCodec`）と、別スレッドでの書き込み（`AsyncFileWriter`、ウデマエでも使う） |
-| `udemae` | ウデマエ（`UdemaeManager`、`udemae.yml` の `UdemaeStorage`、設定 `UdemaeSettings`、行動の一覧 `UdemaeAction`、試合中と勝ち負けの判定 `MatchWatcher`、キル・アシストとモブ兵士の持ち主 `CombatTracker`） |
+| `udemae` | ウデマエ（`UdemaeManager`、`udemae.yml` の `UdemaeStorage`、設定 `UdemaeSettings`、行動の一覧 `UdemaeAction`、試合中・占領中・勝ち負けの判定 `MatchWatcher`、キル・アシストとモブ兵士の持ち主 `CombatTracker`） |
 | `audit` | 監査ログ（`AuditLogger`） |
 | `util` | 文字とボタン（`Text`） |
 
@@ -132,5 +133,5 @@ AI エージェントが作業の前に読む、このプラグインに固有�
 
 ## これから作るもの
 
-- **占領機能**: ウデマエのあとで仕様を決める。できたら、ウデマエの `capture-stay`、`capture-kill`、`capture-assist`（`UdemaeAction` にあり、今は使っていない）をつなぐ。
-- **ウデマエの残り**: 試合中を示すスコアの本当の名前（作者に聞く）。ポイントが減る行動（今は `death` と `lose` が 0）。
+- **ウデマエの残り**: 試合中を示すスコアと占領のスコアの本当の名前（作者に聞く）。ポイントが減る行動（今は `death` と `lose` が 0）。
+- 占領はデータパックが管理するので、プラグインに占領機能は作らない。

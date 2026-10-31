@@ -11,6 +11,7 @@ import java.util.Map;
  * config.yml の udemae の設定。
  * matchHolder が空なら、プレイヤーごとのスコアで「その人が試合中か」を見る。
  * 空でなければ、その持ち主（例: #game）のスコアで「今が試合中か」を見る。
+ * 占領中かは、プレイヤーごとのスコア captureObjective が captureMin 以上かで見る（占領はデータパックが管理する）。
  */
 public record UdemaeSettings(
         List<String> ranks,
@@ -22,6 +23,9 @@ public record UdemaeSettings(
         String winObjective,
         String loseObjective,
         int assistSeconds,
+        String captureObjective,
+        int captureMin,
+        int captureStaySeconds,
         Map<UdemaeAction, Integer> points
 ) {
     private static final List<String> DEFAULT_RANKS =
@@ -45,6 +49,9 @@ public record UdemaeSettings(
                 section.getString("win-objective", "_game_win"),
                 section.getString("lose-objective", "_game_lose"),
                 Math.max(1, section.getInt("assist-seconds", 10)),
+                section.getString("capture.objective", "_game_capture"),
+                section.getInt("capture.min", 1),
+                Math.max(1, section.getInt("capture.stay-seconds", 5)),
                 points);
     }
 

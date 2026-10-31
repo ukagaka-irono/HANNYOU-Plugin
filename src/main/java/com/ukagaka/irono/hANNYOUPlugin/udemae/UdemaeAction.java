@@ -12,7 +12,7 @@ public enum UdemaeAction {
     SOLDIER_RANGED_ASSIST("soldier-ranged-assist", 3),
     MOB_SOLDIER_KILL("mob-soldier-kill", 3),
     MOB_SOLDIER_ASSIST("mob-soldier-assist", 1),
-    // 占領機能ができたらつなぐ
+    // 占領（データパックのスコアで判定する）
     CAPTURE_STAY("capture-stay", 2),
     CAPTURE_KILL("capture-kill", 15),
     CAPTURE_ASSIST("capture-assist", 7),

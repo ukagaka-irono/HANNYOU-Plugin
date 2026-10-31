@@ -34,6 +34,7 @@ import java.util.UUID;
  * 誰の手柄かはダメージの原因（DamageSource）で決める。飛び道具なら遠距離、そうでなければ近接。
  * スポーンエッグで出したモブは「兵士」として持ち主を記録し、兵士の手柄は持ち主のものにする。
  * 同じチームどうし、スペク中の人、試合中でない人は数えない。
+ * プレイヤーを倒したときに占領中なら、キル・アシストの点に占領のボーナスを上乗せする。
  */
 public final class CombatTracker implements Listener {
     /** スポーンエッグを使ってからモブが出るまでの距離の上限（ブロック） */
@@ -217,6 +218,7 @@ public final class CombatTracker implements Listener {
         }
         if (killer != null && isEligible(killer.player(), victim)) {
             reward(killer.player(), soldier ? UdemaeAction.MOB_SOLDIER_KILL : killAction(killer.kind()));
+            if (!soldier) rewardIfCapturing(killer.player(), UdemaeAction.CAPTURE_KILL);
         }
 
         for (Map.Entry<UUID, Hit> entry : victimHits.entrySet()) {
@@ -224,12 +226,20 @@ public final class CombatTracker implements Listener {
             if (killer != null && id.equals(killer.player())) continue;
             if (entry.getValue().tick() < oldest || !isEligible(id, victim)) continue;
             reward(id, soldier ? UdemaeAction.MOB_SOLDIER_ASSIST : assistAction(entry.getValue().kind()));
+            if (!soldier) rewardIfCapturing(id, UdemaeAction.CAPTURE_ASSIST);
         }
     }
 
     private void reward(UUID id, UdemaeAction action) {
         Player player = Bukkit.getPlayer(id);
         if (player != null) plugin.getUdemaeManager().reward(player, action);
+    }
+
+    private void rewardIfCapturing(UUID id, UdemaeAction action) {
+        Player player = Bukkit.getPlayer(id);
+        if (player != null && plugin.getMatchWatcher().isCapturing(player)) {
+            plugin.getUdemaeManager().reward(player, action);
+        }
     }
 
     private static UdemaeAction killAction(Kind kind) {

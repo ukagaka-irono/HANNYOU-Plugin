@@ -15,6 +15,7 @@ import java.util.UUID;
 /**
  * 試合中かどうかと勝ち負けを、スコアボードから読む（試合の進行はデータパックなどが行う）。
  * 勝ち負けは、勝ち（または負け）のスコアが 0 から 0 以外に変わったときに一度だけ数える。
+ * 占領中かもスコアで見て、占領地に決まった秒数いるごとにポイントを入れる。
  */
 public final class MatchWatcher {
     private static final int WIN = 1;
@@ -23,6 +24,8 @@ public final class MatchWatcher {
     private final HANNYOUPlugin plugin;
     /** 前回見たときの勝ち負け（勝ち・負けのどちらでもない人は入れない） */
     private final Map<UUID, Integer> results = new HashMap<>();
+    /** 占領地に続けている秒数（占領地にいない人は入れない） */
+    private final Map<UUID, Integer> captureSeconds = new HashMap<>();
     private BukkitTask task;
 
     public MatchWatcher(HANNYOUPlugin plugin) {
@@ -30,7 +33,10 @@ public final class MatchWatcher {
     }
 
     public void start() {
-        task = Bukkit.getScheduler().runTaskTimer(plugin, this::checkResults, 20L, 20L);
+        task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            checkResults();
+            checkCapture();
+        }, 20L, 20L);
     }
 
     public void stop() {
@@ -54,6 +60,33 @@ public final class MatchWatcher {
                 ? objective.getScoreFor(player)
                 : objective.getScore(settings.matchHolder());
         return score.isScoreSet() && score.getScore() == settings.matchValue();
+    }
+
+    /** 占領中か（プレイヤーごとの占領のスコアが下限以上） */
+    public boolean isCapturing(Player player) {
+        UdemaeSettings settings = settings();
+        Objective objective = objective(settings.captureObjective());
+        if (objective == null) return false;
+        Score score = objective.getScoreFor(player);
+        return score.isScoreSet() && score.getScore() >= settings.captureMin();
+    }
+
+    /** 毎秒呼ぶ */
+    private void checkCapture() {
+        int staySeconds = settings().captureStaySeconds();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            UUID id = player.getUniqueId();
+            if (!isCounted(player) || !isCapturing(player)) {
+                captureSeconds.remove(id);
+                continue;
+            }
+            int seconds = captureSeconds.merge(id, 1, Integer::sum);
+            if (seconds >= staySeconds) {
+                captureSeconds.remove(id);
+                plugin.getUdemaeManager().reward(player, UdemaeAction.CAPTURE_STAY);
+            }
+        }
+        captureSeconds.keySet().removeIf(id -> Bukkit.getPlayer(id) == null);
     }
 
     private void checkResults() {

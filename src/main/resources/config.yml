@@ -28,6 +28,12 @@ udemae:
   lose-objective: _game_lose
   # 倒される前の何秒以内にダメージを与えていたらアシストにするか
   assist-seconds: 10
+  # 占領の判定（占領はデータパックが管理する）。プレイヤーごとのこのスコアが min 以上なら占領中
+  capture:
+    objective: _game_capture
+    min: 1
+    # 占領地に何秒いるごとに capture-stay のポイントを入れるか
+    stay-seconds: 5
   # 行動ごとのポイント（仮の数字。マイナスにすると減る）
   points:
     melee-kill: 10              # 近接武器でキル
@@ -40,9 +46,9 @@ udemae:
     soldier-ranged-assist: 3
     mob-soldier-kill: 3         # ほかの人のモブ兵士をキル
     mob-soldier-assist: 1
-    capture-stay: 2             # 占領地に5秒いるごと（占領機能ができたら使う）
-    capture-kill: 15            # 占領中のキル（キルの点に上乗せ。占領機能ができたら使う）
-    capture-assist: 7           # 占領中のアシスト（同上）
+    capture-stay: 2             # 占領地に capture.stay-seconds 秒いるごと
+    capture-kill: 15            # 占領中にプレイヤーをキル（キルの点に上乗せ）
+    capture-assist: 7           # 占領中にプレイヤーをアシスト（アシストの点に上乗せ）
     win: 30                     # 試合に勝つ
     death: 0                    # 倒される
     lose: 0                     # 試合に負ける
