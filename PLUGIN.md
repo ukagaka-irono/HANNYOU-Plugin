@@ -14,7 +14,7 @@ AI エージェントが作業の前に読む、このプラグインに固有�
 | | |
 |---|---|
 | サーバー | Paper 26.1.2（Spigot と CraftBukkit では動かないことがある） |
-| Folia | 対応しない |
+| Folia | 対応しない。Folia 26.1.2 ではスコアボードのチーム・スコアを新しく作れず（`registerNewTeam` / `registerNewObjective` が `UnsupportedOperationException`）、`/scoreboard`・`/team`・`/tag` も無効なため、スペクモードのチーム、ウデマエの試合の判定と書き出し、RandomTeam が動かない。2026-10-31 に作者と相談して見送った。Folia がスコアボードに対応したら検討し直す（そのときは `Bukkit.getScheduler()` と、ほかのプレイヤーを触る処理の書き換えも要る） |
 | Java | 25 |
 | 形式 | plugin.yml（Bukkit）。`build.gradle.kts` の `bukkitPluginYaml { }`（resource-factory）から生成し、`src/main/resources/` には置かない |
 | 依存プラグイン | なし |
