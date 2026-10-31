@@ -2,11 +2,14 @@ package com.ukagaka.irono.hANNYOUPlugin.udemae;
 
 import com.ukagaka.irono.hANNYOUPlugin.HANNYOUPlugin;
 import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Score;
 import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
+import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,7 +18,7 @@ import java.util.UUID;
 /**
  * 試合中かどうかと勝ち負けを、スコアボードから読む（試合の進行はデータパックなどが行う）。
  * 勝ち負けは、勝ち（または負け）のスコアが 0 から 0 以外に変わったときに一度だけ数える。
- * 占領中かもスコアで見て、占領地に決まった秒数いるごとにポイントを入れる。
+ * 占領中かもデータパックのスコアと拠点の座標で見て、占領地に決まった秒数いるごとにポイントを入れる。
  */
 public final class MatchWatcher {
     private static final int WIN = 1;
@@ -62,18 +65,27 @@ public final class MatchWatcher {
         return score.isScoreSet() && score.getScore() == settings.matchValue();
     }
 
-    /** 占領中か（プレイヤーごとの占領のスコアが下限以上） */
+    /** 占領中か（データパックと同じ条件。{@link UdemaeSettings.Capture}） */
     public boolean isCapturing(Player player) {
-        UdemaeSettings settings = settings();
-        Objective objective = objective(settings.captureObjective());
-        if (objective == null) return false;
-        Score score = objective.getScoreFor(player);
-        return score.isScoreSet() && score.getScore() >= settings.captureMin();
+        UdemaeSettings.Capture capture = settings().capture();
+        Objective phaseObjective = objective(capture.phaseObjective());
+        if (phaseObjective == null) return false;
+        Score phase = phaseObjective.getScore(capture.phaseHolder());
+        if (!phase.isScoreSet() || phase.getScore() < 0 || phase.getScore() >= capture.points().size()) return false;
+
+        if (!capture.team().isEmpty()) {
+            Team team = Bukkit.getScoreboardManager().getMainScoreboard().getEntryTeam(player.getName());
+            if (team == null || !team.getName().equals(capture.team())) return false;
+        }
+        World world = capture.world().isEmpty() ? Bukkit.getWorlds().getFirst() : Bukkit.getWorld(capture.world());
+        if (world == null || !player.getWorld().equals(world)) return false;
+        Vector point = capture.points().get(phase.getScore());
+        return player.getLocation().toVector().distanceSquared(point) <= capture.radius() * capture.radius();
     }
 
     /** 毎秒呼ぶ */
     private void checkCapture() {
-        int staySeconds = settings().captureStaySeconds();
+        int staySeconds = settings().capture().staySeconds();
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID id = player.getUniqueId();
             if (!isCounted(player) || !isCapturing(player)) {

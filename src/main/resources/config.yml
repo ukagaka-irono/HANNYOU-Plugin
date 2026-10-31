@@ -28,10 +28,21 @@ udemae:
   lose-objective: _game_lose
   # 倒される前の何秒以内にダメージを与えていたらアシストにするか
   assist-seconds: 10
-  # 占領の判定（占領はデータパックが管理する）。プレイヤーごとのこのスコアが min 以上なら占領中
+  # 占領の判定。占領はデータパック（cok_area）が管理するので、データパックと同じ条件で見る:
+  # phase-objective の phase-holder の値が今の拠点の番号（0 = 1つ目）で、team の人がその拠点の radius ブロック以内にいれば占領中
   capture:
-    objective: _game_capture
-    min: 1
+    phase-objective: area_manage
+    phase-holder: phase
+    team: atk
+    # 拠点のあるワールド（空ならメインのワールド）
+    world: ""
+    radius: 2
+    # 拠点の座標（上から1つ目、2つ目…）。データパックの main.mcfunction と同じ座標にする
+    points:
+      - [-118, 69, -154]
+      - [-64, 74, -266]
+      - [-48, 75, -132]
+      - [17, 82, -147]
     # 占領地に何秒いるごとに capture-stay のポイントを入れるか
     stay-seconds: 5
   # 行動ごとのポイント（仮の数字。マイナスにすると減る）
