@@ -48,7 +48,7 @@ public final class HannyouCommand {
         send(sender, "§6=== 汎用プラグイン（HANNYOU Plugin） ===");
         helpLine(sender, "/hannyou udemae", "", "自分のウデマエを見る");
         if (!Permissions.isOperator(sender)) return Command.SINGLE_SUCCESS;
-        helpLine(sender, "/hannyou udemae", " <プレイヤー>", "ほかの人のウデマエを見る（set・add・reset で書き換え）");
+        helpLine(sender, "/hannyou udemae", " <プレイヤー>", "ほかの人のウデマエを見る");
         helpLine(sender, "/hannyou knights", "", "役職の一覧・作成・付与・削除");
         helpLine(sender, "/hannyou spec", " [対象]", "見えない・ぶつからない・操作できないクリエイティブにする（省略時は自分）");
         helpLine(sender, "/hannyou unspec", " [対象]", "スペクモードを解除する（省略時は自分）");

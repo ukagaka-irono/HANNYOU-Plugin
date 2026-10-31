@@ -78,16 +78,6 @@ public final class UdemaeManager implements Listener {
         return new Rank(ranks.get(index), total - index * perRank, perRank, index == ranks.size() - 1);
     }
 
-    /** ランクとその中のポイントから、合計ポイントを返す（無いランクなら -1） */
-    public int totalOf(String rankName, int points) {
-        int index = settings().ranks().indexOf(rankName);
-        return index < 0 ? -1 : index * settings().pointsPerRank() + points;
-    }
-
-    public List<String> rankNames() {
-        return settings().ranks();
-    }
-
     /** 行動に応じてポイントを増減する（設定が 0 なら何もしない） */
     public void reward(Player player, UdemaeAction action) {
         int points = settings().points(action);
@@ -96,7 +86,7 @@ public final class UdemaeManager implements Listener {
     }
 
     /** 合計ポイントを書き換える（0 未満にはならない） */
-    public void set(UUID id, String name, int total) {
+    private void set(UUID id, String name, int total) {
         int clamped = Math.max(0, total);
         entries.put(id, new UdemaeStorage.Entry(name, clamped));
         dirty = true;
