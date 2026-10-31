@@ -9,6 +9,10 @@ import com.ukagaka.irono.hANNYOUPlugin.role.TrialManager;
 import com.ukagaka.irono.hANNYOUPlugin.spec.SpecManager;
 import com.ukagaka.irono.hANNYOUPlugin.spec.SpecRestrictions;
 import com.ukagaka.irono.hANNYOUPlugin.storage.RoleStorage;
+import com.ukagaka.irono.hANNYOUPlugin.udemae.CombatTracker;
+import com.ukagaka.irono.hANNYOUPlugin.udemae.MatchWatcher;
+import com.ukagaka.irono.hANNYOUPlugin.udemae.UdemaeManager;
+import com.ukagaka.irono.hANNYOUPlugin.udemae.UdemaeStorage;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -23,6 +27,8 @@ public final class HANNYOUPlugin extends JavaPlugin {
     private AuditLogger auditLogger;
     private GuiListener guiListener;
     private SpecManager specManager;
+    private UdemaeManager udemaeManager;
+    private MatchWatcher matchWatcher;
 
     @Override
     public void onEnable() {
@@ -38,6 +44,8 @@ public final class HANNYOUPlugin extends JavaPlugin {
         trialManager = new TrialManager(this);
         guiListener = new GuiListener();
         specManager = new SpecManager(this);
+        udemaeManager = new UdemaeManager(this, new UdemaeStorage(getDataFolder(), getLogger()));
+        matchWatcher = new MatchWatcher(this);
 
         PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(trialManager, this);
@@ -46,6 +54,10 @@ public final class HANNYOUPlugin extends JavaPlugin {
         pm.registerEvents(specManager, this);
         pm.registerEvents(new SpecRestrictions(specManager), this);
         specManager.start();
+        pm.registerEvents(udemaeManager, this);
+        pm.registerEvents(new CombatTracker(this), this);
+        udemaeManager.start();
+        matchWatcher.start();
 
         HannyouCommand command = new HannyouCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
@@ -54,6 +66,8 @@ public final class HANNYOUPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (matchWatcher != null) matchWatcher.stop();
+        if (udemaeManager != null) udemaeManager.stop();
         if (specManager != null) specManager.stop();
         if (guiListener != null) guiListener.closeAll();
         if (trialManager != null) trialManager.endAll();
@@ -64,6 +78,7 @@ public final class HANNYOUPlugin extends JavaPlugin {
     public void reloadPluginConfig() {
         reloadConfig();
         pluginConfig = PluginConfig.from(getConfig());
+        udemaeManager.reload();
     }
 
     public PluginConfig getPluginConfig() { return pluginConfig; }
@@ -73,4 +88,6 @@ public final class HANNYOUPlugin extends JavaPlugin {
     public AuditLogger getAuditLogger() { return auditLogger; }
     public GuiListener getGuiListener() { return guiListener; }
     public SpecManager getSpecManager() { return specManager; }
+    public UdemaeManager getUdemaeManager() { return udemaeManager; }
+    public MatchWatcher getMatchWatcher() { return matchWatcher; }
 }

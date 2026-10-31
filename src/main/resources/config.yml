@@ -8,3 +8,41 @@ settings:
   max-roles: -1
   # 参加時に役職の装備・インベントリを再配布する (false の場合はポーション効果のみ再適用)
   reapply-items-on-join: true
+
+# ウデマエ
+udemae:
+  # ランクの名前（下から順に）。はじめての人はいちばん下の 0 ポイントから始まる
+  ranks: [C-, C, C+, B-, B, B+, A-, A, A+, S, S+]
+  # 1つのランクの中のポイント。これに届くと次のランクに上がる
+  points-per-rank: 100
+  # 合計ポイントを書き出すスコアボードのスコアの名前（RandomTeam などがチーム分けで読む）。空にすると書き出さない
+  export-objective: udemae
+  # 試合中の判定。このスコアの値が value のときだけウデマエを数える
+  match:
+    objective: hannyou_match
+    # 空なら、プレイヤーごとのスコアを見る（その人が試合中か）。#game などを書くと、その持ち主のスコアを見る（今が試合中か）
+    holder: ""
+    value: 1
+  # 勝ち・負けのスコア（0 から 0 以外に変わったときに一度だけ数える）
+  win-objective: _game_win
+  lose-objective: _game_lose
+  # 倒される前の何秒以内にダメージを与えていたらアシストにするか
+  assist-seconds: 10
+  # 行動ごとのポイント（仮の数字。マイナスにすると減る）
+  points:
+    melee-kill: 10              # 近接武器でキル
+    melee-assist: 5             # 近接武器でアシスト
+    ranged-kill: 12             # 遠距離武器で射抜いてキル
+    ranged-assist: 6            # 遠距離武器で射抜いてアシスト
+    soldier-melee-kill: 6       # スポーンエッグで出した兵士が近接でキル
+    soldier-melee-assist: 3
+    soldier-ranged-kill: 6      # スポーンエッグで出した兵士が遠距離でキル
+    soldier-ranged-assist: 3
+    mob-soldier-kill: 3         # ほかの人のモブ兵士をキル
+    mob-soldier-assist: 1
+    capture-stay: 2             # 占領地に5秒いるごと（占領機能ができたら使う）
+    capture-kill: 15            # 占領中のキル（キルの点に上乗せ。占領機能ができたら使う）
+    capture-assist: 7           # 占領中のアシスト（同上）
+    win: 30                     # 試合に勝つ
+    death: 0                    # 倒される
+    lose: 0                     # 試合に負ける

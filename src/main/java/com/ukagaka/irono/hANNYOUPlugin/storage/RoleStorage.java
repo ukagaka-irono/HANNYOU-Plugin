@@ -10,12 +10,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -24,32 +20,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * knights-role.yml への永続化。
- * 内容はメインスレッドで文字列にまとめ、ファイルへの書き込みは専用スレッド1本で行うため、TPSを下げない。
- * 書き込み待ちの間に変更が重なった場合は、最新の内容だけを書き込む。
- * 一時ファイルに書いてから置き換えるので、書き込み中に落ちてもファイルが壊れない。
+ * 内容はメインスレッドで文字列にまとめ、ファイルへの書き込みは {@link AsyncFileWriter} に任せる。
  */
 public final class RoleStorage {
     public static final String FILE_NAME = "knights-role.yml";
-    private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
     private static final List<String> HEADER = List.of(
             "汎用プラグイン（HANNYOU Plugin） - Knights Editor の役職データ",
             "手で編集するときは、サーバーを止めてから編集してください");
 
     private final Logger logger;
     private final Path file;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(
-            Thread.ofPlatform().name("HANNYOU-Storage").daemon().factory());
-    /** 書き込み待ちの内容（なければnull） */
-    private final AtomicReference<String> pending = new AtomicReference<>();
+    private final AsyncFileWriter writer;
     /**
      * 役職ごとの変換済みの内容。保存のたびに全役職のアイテムを変換し直さず、変わった役職だけを変換する。
      * 役職を変更するときは必ず新しい Role（作業コピー）で保存し直すので、同じ Role なら内容も同じ。
@@ -66,6 +52,7 @@ public final class RoleStorage {
     public RoleStorage(File dataFolder, Logger logger) {
         this.logger = logger;
         this.file = dataFolder.toPath().resolve(FILE_NAME);
+        this.writer = new AsyncFileWriter(file, "HANNYOU-Storage", logger);
     }
 
     /** 保存済みの全役職を読み込む（起動時に一度だけ同期実行） */
@@ -76,14 +63,7 @@ public final class RoleStorage {
         try {
             yml.loadFromString(Files.readString(file, StandardCharsets.UTF_8));
         } catch (IOException | InvalidConfigurationException e) {
-            Path backup = file.resolveSibling(FILE_NAME + ".broken-" + TIMESTAMP.format(LocalDateTime.now()));
-            try {
-                Files.copy(file, backup);
-                logger.log(Level.SEVERE, FILE_NAME + " を読み込めませんでした。" + backup.getFileName()
-                        + " に退避し、役職なしで起動します", e);
-            } catch (IOException copyError) {
-                logger.log(Level.SEVERE, FILE_NAME + " を読み込めず、退避もできませんでした", copyError);
-            }
+            writer.backupBroken(e, "役職なしで起動します");
             return new LoadResult(Map.of(), Map.of(), false);
         }
 
@@ -143,39 +123,11 @@ public final class RoleStorage {
             section.set("effects", RoleYaml.writeEffects(entry.getValue().effects()));
         });
 
-        if (pending.getAndSet(yml.saveToString()) == null && !executor.isShutdown()) {
-            executor.execute(this::flush);
-        }
-    }
-
-    private void flush() {
-        String content = pending.getAndSet(null);
-        if (content == null) return;
-        try {
-            Files.createDirectories(file.getParent());
-            Path temp = file.resolveSibling(FILE_NAME + ".tmp");
-            Files.writeString(temp, content, StandardCharsets.UTF_8);
-            try {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException e) {
-            logger.log(Level.SEVERE, FILE_NAME + " への保存に失敗しました", e);
-        }
+        writer.write(yml.saveToString());
     }
 
     /** 未処理の書き込みをすべて終える */
     public void close() {
-        executor.shutdown();
-        try {
-            if (executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                flush(); // 停止の直前に積まれた分
-            } else {
-                logger.warning(FILE_NAME + " への書き込みが時間内に終わりませんでした");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        writer.close();
     }
 }
